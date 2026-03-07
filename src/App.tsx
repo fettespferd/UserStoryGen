@@ -82,7 +82,14 @@ const PLAIN_COLORS: Record<string, string> = {
   sunset: '#FF6B35',
 };
 
-const LIGHT_BACKGROUNDS = ['plain-light', 'plain-cream', 'plain-sky', 'plain-mint', 'plain-lavender', 'plain-peach'];
+const LIGHT_BACKGROUND_COLORS = ['light', 'cream', 'sky', 'mint', 'lavender', 'peach'];
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 const FONT_FAMILIES: Record<FontOption, string> = {
   'source-sans-3': '"Source Sans 3", system-ui, sans-serif',
@@ -234,17 +241,16 @@ function App() {
     return sorted;
   }, [store.items, filterType, searchQuery, sortBy]);
 
-  const isLightMode = LIGHT_BACKGROUNDS.includes(settings?.background ?? '');
+  const bgColorKey = settings?.backgroundColor ?? (settings?.background?.startsWith('plain-') ? settings.background.replace('plain-', '') : 'dark');
+  const isLightMode = LIGHT_BACKGROUND_COLORS.includes(bgColorKey);
   const theme = useMemo(
     () => createAppTheme((settings?.font ?? 'source-sans-3') as FontOption, isLightMode),
-    [settings?.font, settings?.background]
+    [settings?.font, settings?.backgroundColor, settings?.background]
   );
 
-  const bg = settings?.background ?? 'plain-dark';
-  const bgPlainColor = bg.startsWith('plain-')
-    ? (PLAIN_COLORS[bg.replace('plain-', '')] ?? PLAIN_COLORS.dark)
-    : null;
-  const bgImageUrl = bg.startsWith('image-') ? BACKGROUND_IMAGES[bg.replace('image-', '')] : null;
+  const bgImageKey = settings?.backgroundImage ?? (settings?.background?.startsWith('image-') ? settings.background.replace('image-', '') : null);
+  const bgPlainColor = PLAIN_COLORS[bgColorKey] ?? PLAIN_COLORS.dark;
+  const bgImageUrl = bgImageKey ? BACKGROUND_IMAGES[bgImageKey] : null;
 
   return (
     <ThemeProvider theme={theme}>
@@ -265,7 +271,7 @@ function App() {
               inset: 0,
               zIndex: 0,
               pointerEvents: 'none',
-              backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.92) 0%, rgba(20,18,16,0.85) 50%, rgba(20,18,16,0.95) 100%), url(${bgImageUrl})`,
+              backgroundImage: `linear-gradient(180deg, ${hexToRgba(bgPlainColor, 0.92)} 0%, ${hexToRgba(bgPlainColor, 0.85)} 50%, ${hexToRgba(bgPlainColor, 0.95)} 100%), url(${bgImageUrl})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
             }}

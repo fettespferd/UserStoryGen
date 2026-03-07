@@ -149,7 +149,7 @@ export interface TenantLinks {
 
 export type MarkdownLinkTenant = 'none' | 'aokn' | 'vitagroup';
 
-/** Hintergrund der Hauptansicht: Plain-Farben oder Bild-Assets. */
+/** Hintergrund der Hauptansicht: Plain-Farben oder Bild-Assets. @deprecated Nutze backgroundImage + backgroundColor. */
 export type BackgroundOption =
   | 'plain-dark'
   | 'plain-navy'
@@ -170,6 +170,26 @@ export type BackgroundOption =
   | 'image-howard'
   | 'image-kari'
   | 'image-nubelson';
+
+/** Farbe für Hintergrund (ohne Bild) oder als Overlay über Bild. */
+export type BackgroundColorKey =
+  | 'dark'
+  | 'navy'
+  | 'forest'
+  | 'burgundy'
+  | 'slate'
+  | 'light'
+  | 'cream'
+  | 'sky'
+  | 'mint'
+  | 'lavender'
+  | 'peach'
+  | 'coral'
+  | 'electric'
+  | 'sunset';
+
+/** Bild-Asset für Hintergrund (optional, kann mit Farbe kombiniert werden). */
+export type BackgroundImageKey = 'annie' | 'emile' | 'howard' | 'kari' | 'nubelson';
 
 /** Schriftart-Optionen für die Oberfläche. */
 export type FontOption =
@@ -234,8 +254,12 @@ export interface Settings {
   tenantLinks?: TenantLinks;
   /** Standard-Tenant für Markdown-Link (wird in MarkdownPreview überschrieben). */
   markdownLinkTenant?: MarkdownLinkTenant;
-  /** Hintergrund der Hauptansicht (Startseite). */
+  /** @deprecated Migration: Nutze backgroundImage + backgroundColor. */
   background?: BackgroundOption;
+  /** Bild-Asset für Hintergrund (null/undefined = kein Bild). Kann mit backgroundColor kombiniert werden. */
+  backgroundImage?: BackgroundImageKey | null;
+  /** Farbe: als Vollton (ohne Bild) oder als Overlay über Bild. */
+  backgroundColor?: BackgroundColorKey;
   /** Schriftart der Oberfläche. */
   font?: FontOption;
   /** Benutzerdefinierte Vorlagen für leere User Stories. */

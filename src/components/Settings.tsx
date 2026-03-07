@@ -24,7 +24,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel, BackgroundOption, FontOption, ProjectType, PromptTemplate } from '../types/story';
+import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel, BackgroundColorKey, BackgroundImageKey, FontOption, ProjectType, PromptTemplate } from '../types/story';
 import type { UseStorageReturn } from '../hooks/useStorage';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { FolderAccessDialog } from './FolderAccessDialog';
@@ -36,12 +36,54 @@ import bgHoward from '../../assets/howard-bouchevereau-RSCirJ70NDM-unsplash.jpg'
 import bgKari from '../../assets/kari-shea-1SAnrIxw5OY-unsplash.jpg';
 import bgNubelson from '../../assets/nubelson-fernandes--Xqckh_XVU4-unsplash.jpg';
 
-const BG_IMAGE_URLS: Record<string, string> = {
-  'image-annie': bgAnnie,
-  'image-emile': bgEmile,
-  'image-howard': bgHoward,
-  'image-kari': bgKari,
-  'image-nubelson': bgNubelson,
+const BG_IMAGE_URLS: Record<BackgroundImageKey, string> = {
+  annie: bgAnnie,
+  emile: bgEmile,
+  howard: bgHoward,
+  kari: bgKari,
+  nubelson: bgNubelson,
+};
+
+const BG_COLORS: Record<BackgroundColorKey, string> = {
+  dark: '#1a1a1a',
+  navy: '#0f172a',
+  forest: '#0f1f12',
+  burgundy: '#1a0f12',
+  slate: '#1e293b',
+  light: '#f0f0f0',
+  cream: '#fef5e7',
+  sky: '#e3f2fd',
+  mint: '#e8f5e9',
+  lavender: '#f3e5f5',
+  peach: '#ffebe6',
+  coral: '#FF4757',
+  electric: '#00D4FF',
+  sunset: '#FF6B35',
+};
+
+const BG_COLOR_LABELS: Record<BackgroundColorKey, string> = {
+  dark: 'Dunkel',
+  navy: 'Navy',
+  forest: 'Wald',
+  burgundy: 'Burgunder',
+  slate: 'Schiefer',
+  light: 'Hell',
+  cream: 'Creme',
+  sky: 'Himmel',
+  mint: 'Minze',
+  lavender: 'Lavendel',
+  peach: 'Pfirsich',
+  coral: 'Koralle',
+  electric: 'Elektrisch',
+  sunset: 'Sonnenuntergang',
+};
+
+const BG_IMAGE_LABELS: Record<BackgroundImageKey, string> = {
+  annie: 'Annie',
+  emile: 'Emile',
+  howard: 'Howard',
+  kari: 'Kari',
+  nubelson: 'Nubelson',
 };
 
 interface SettingsProps {
@@ -88,7 +130,12 @@ export function Settings({
   const [vitagroupAccessibilityUrl, setVitagroupAccessibilityUrl] = useState(
     settings?.tenantLinks?.vitagroup?.accessibilityPage ?? ''
   );
-  const [background, setBackground] = useState<BackgroundOption>(settings?.background ?? 'plain-dark');
+  const [backgroundImage, setBackgroundImage] = useState<BackgroundImageKey | null>(
+    settings?.backgroundImage ?? (settings?.background?.startsWith('image-') ? (settings.background.replace('image-', '') as BackgroundImageKey) : null)
+  );
+  const [backgroundColor, setBackgroundColor] = useState<BackgroundColorKey>(
+    (settings?.backgroundColor ?? (settings?.background?.startsWith('plain-') ? settings.background.replace('plain-', '') : 'dark')) as BackgroundColorKey
+  );
   const [font, setFont] = useState<FontOption>(settings?.font ?? 'source-sans-3');
   const [defaultProject, setDefaultProject] = useState<ProjectType>(settings?.defaultProject ?? 'aokn');
   const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
@@ -113,11 +160,12 @@ export function Settings({
       setCustomSystemPromptEN(settings.customSystemPromptEN ?? '');
       setAoknAccessibilityUrl(settings.tenantLinks?.aokn?.accessibilityPage ?? '');
       setVitagroupAccessibilityUrl(settings.tenantLinks?.vitagroup?.accessibilityPage ?? '');
-      const bg = settings.background ?? 'plain-dark';
-      const validBg = ['plain-dark','plain-navy','plain-forest','plain-burgundy','plain-slate','plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach','plain-coral','plain-electric','plain-sunset','image-annie','image-emile','image-howard','image-kari','image-nubelson'].includes(bg)
-        ? bg
-        : 'plain-dark';
-      setBackground(validBg);
+      const validColors: BackgroundColorKey[] = ['dark','navy','forest','burgundy','slate','light','cream','sky','mint','lavender','peach','coral','electric','sunset'];
+      const validImages: BackgroundImageKey[] = ['annie','emile','howard','kari','nubelson'];
+      const img = settings.backgroundImage ?? (settings.background?.startsWith('image-') ? settings.background.replace('image-', '') : null);
+      setBackgroundImage(img && validImages.includes(img as BackgroundImageKey) ? (img as BackgroundImageKey) : null);
+      const col = settings.backgroundColor ?? (settings.background?.startsWith('plain-') ? settings.background.replace('plain-', '') : 'dark');
+      setBackgroundColor(validColors.includes(col as BackgroundColorKey) ? (col as BackgroundColorKey) : 'dark');
       setFont(settings.font ?? 'source-sans-3');
       setDefaultProject(settings.defaultProject ?? 'aokn');
       setShowProjectOption(settings.showProjectOption ?? true);
@@ -166,7 +214,8 @@ export function Settings({
         aokn: aoknAccessibilityUrl.trim() ? { accessibilityPage: aoknAccessibilityUrl.trim() } : undefined,
         vitagroup: vitagroupAccessibilityUrl.trim() ? { accessibilityPage: vitagroupAccessibilityUrl.trim() } : undefined,
       },
-      background,
+      backgroundImage: backgroundImage ?? undefined,
+      backgroundColor,
       font,
       defaultProject,
       showProjectOption,
@@ -329,60 +378,43 @@ export function Settings({
             Hintergrund
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Farbe oder Bild für die Hauptansicht.
+            Bild (optional) und Farbe. Ohne Bild: Vollton. Mit Bild: Farbe als Overlay.
           </Typography>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 1,
-            }}
-          >
-            {(['plain-dark', 'plain-navy', 'plain-forest', 'plain-light', 'plain-cream', 'plain-sky', 'plain-coral', 'plain-electric', 'plain-sunset'] as const).map((opt) => (
-              <Box
-                key={opt}
-                onClick={() => setBackground(opt)}
-                sx={{
-                  width: 48,
-                  height: 48,
-                  flexShrink: 0,
-                  borderRadius: 1,
-                  bgcolor: {
-                    'plain-dark': '#1a1a1a',
-                    'plain-navy': '#0f172a',
-                    'plain-forest': '#0f1f12',
-                    'plain-light': '#f0f0f0',
-                    'plain-cream': '#fef5e7',
-                    'plain-sky': '#e3f2fd',
-                    'plain-coral': '#FF4757',
-                    'plain-electric': '#00D4FF',
-                    'plain-sunset': '#FF6B35',
-                  }[opt],
-                  border: '2px solid',
-                  borderColor: background === opt ? 'primary.main' : ['plain-light','plain-cream','plain-sky'].includes(opt) ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
-                  cursor: 'pointer',
-                  '&:hover': { opacity: 0.9 },
-                }}
-                title={{
-                  'plain-dark': 'Dunkel',
-                  'plain-navy': 'Navy',
-                  'plain-forest': 'Wald',
-                  'plain-light': 'Hell',
-                  'plain-cream': 'Creme',
-                  'plain-sky': 'Himmel',
-                  'plain-coral': 'Koralle',
-                  'plain-electric': 'Elektrisch',
-                  'plain-sunset': 'Sonnenuntergang',
-                }[opt]}
-              />
-            ))}
-            {(['image-annie', 'image-emile', 'image-howard', 'image-kari', 'image-nubelson'] as const).map((opt) => (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+            Bild
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            <Box
+              onClick={() => setBackgroundImage(null)}
+              sx={{
+                width: 48,
+                height: 48,
+                flexShrink: 0,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                border: '2px solid',
+                borderColor: backgroundImage === null ? 'primary.main' : 'divider',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                color: 'text.secondary',
+                textAlign: 'center',
+                px: 0.5,
+                '&:hover': { opacity: 0.9 },
+              }}
+              title="Kein Bild"
+            >
+              Kein
+            </Box>
+            {(['annie', 'emile', 'howard', 'kari', 'nubelson'] as const).map((opt) => (
               <Box
                 key={opt}
                 component="img"
                 src={BG_IMAGE_URLS[opt]}
                 alt=""
-                onClick={() => setBackground(opt)}
+                onClick={() => setBackgroundImage(opt)}
                 sx={{
                   width: 48,
                   height: 48,
@@ -390,10 +422,34 @@ export function Settings({
                   borderRadius: 1,
                   objectFit: 'cover',
                   border: '2px solid',
-                  borderColor: background === opt ? 'primary.main' : 'transparent',
+                  borderColor: backgroundImage === opt ? 'primary.main' : 'transparent',
                   cursor: 'pointer',
                   '&:hover': { opacity: 0.9 },
                 }}
+                title={BG_IMAGE_LABELS[opt]}
+              />
+            ))}
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+            Farbe
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {(['dark', 'navy', 'forest', 'burgundy', 'slate', 'light', 'cream', 'sky', 'mint', 'lavender', 'peach', 'coral', 'electric', 'sunset'] as const).map((opt) => (
+              <Box
+                key={opt}
+                onClick={() => setBackgroundColor(opt)}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  flexShrink: 0,
+                  borderRadius: 1,
+                  bgcolor: BG_COLORS[opt],
+                  border: '2px solid',
+                  borderColor: backgroundColor === opt ? 'primary.main' : ['light','cream','sky','mint','lavender','peach'].includes(opt) ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
+                  cursor: 'pointer',
+                  '&:hover': { opacity: 0.9 },
+                }}
+                title={BG_COLOR_LABELS[opt]}
               />
             ))}
           </Box>
