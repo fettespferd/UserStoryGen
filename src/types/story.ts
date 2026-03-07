@@ -120,11 +120,61 @@ export interface TenantLinks {
 
 export type MarkdownLinkTenant = 'none' | 'aokn' | 'vitagroup';
 
+/** Hintergrund der Hauptansicht: Plain-Farben oder Bild-Assets. */
+export type BackgroundOption =
+  | 'plain-dark'
+  | 'plain-navy'
+  | 'plain-forest'
+  | 'plain-burgundy'
+  | 'plain-slate'
+  | 'plain-light'
+  | 'plain-cream'
+  | 'plain-sky'
+  | 'plain-mint'
+  | 'plain-lavender'
+  | 'plain-peach'
+  | 'image-annie'
+  | 'image-emile'
+  | 'image-howard'
+  | 'image-kari'
+  | 'image-nubelson';
+
+/** Schriftart-Optionen für die Oberfläche. */
+export type FontOption =
+  | 'source-sans-3'
+  | 'inter'
+  | 'ibm-plex-sans'
+  | 'open-sans'
+  | 'lato'
+  | 'work-sans'
+  | 'nunito'
+  | 'plus-jakarta-sans'
+  | 'outfit'
+  | 'manrope';
+
 /** OpenAI-Modelle (Vision-fähig für Bildanalyse). */
-export type OpenAIModel = 'gpt-4o' | 'gpt-4o-mini' | 'gpt-4-turbo' | 'gpt-4';
+export type OpenAIModel =
+  | 'gpt-5.4'
+  | 'gpt-4.1'
+  | 'gpt-4.1-mini'
+  | 'o4-mini'
+  | 'gpt-4o'
+  | 'gpt-4o-mini'
+  | 'gpt-4-turbo'
+  | 'gpt-4';
 
 /** Claude-Modelle (Vision-fähig). */
-export type AnthropicModel = 'claude-3-5-sonnet-20241022' | 'claude-3-5-haiku-20241022' | 'claude-3-opus-20240229' | 'claude-3-sonnet-20240229' | 'claude-3-haiku-20240307';
+export type AnthropicModel =
+  | 'claude-sonnet-4-6'
+  | 'claude-opus-4-6'
+  | 'claude-haiku-4-5'
+  | 'claude-sonnet-4'
+  | 'claude-opus-4'
+  | 'claude-3-5-sonnet-20241022'
+  | 'claude-3-5-haiku-20241022'
+  | 'claude-3-opus-20240229'
+  | 'claude-3-sonnet-20240229'
+  | 'claude-3-haiku-20240307';
 
 export interface Settings {
   /** @deprecated Nutze apiKeyOpenAI / apiKeyAnthropic. Fallback für Migration. */
@@ -136,6 +186,10 @@ export interface Settings {
   provider: AIProvider;
   defaultLang: 'de' | 'en';
   defaultTicketType: 'user-story' | 'bug';
+  /** Standard-Projekt bei neuer Story. */
+  defaultProject?: ProjectType;
+  /** Projekt-Auswahl bei neuer Story anzeigen (false = nur defaultProject verwenden). */
+  showProjectOption?: boolean;
   /** @deprecated Migration: wird in customSystemPromptDE/EN übernommen. */
   customSystemPrompt?: string;
   /** Angepasster System-Prompt für Deutsch. Leer = Standard-Prompt. */
@@ -148,4 +202,8 @@ export interface Settings {
   tenantLinks?: TenantLinks;
   /** Standard-Tenant für Markdown-Link (wird in MarkdownPreview überschrieben). */
   markdownLinkTenant?: MarkdownLinkTenant;
+  /** Hintergrund der Hauptansicht (Startseite). */
+  background?: BackgroundOption;
+  /** Schriftart der Oberfläche. */
+  font?: FontOption;
 }

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Paper,
   Typography,
@@ -11,7 +11,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type { TicketTypeChoice } from './TicketTypeSelector';
@@ -35,10 +35,16 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const [selectedType, setSelectedType] = useState<TicketTypeChoice>('user-story');
-  const [project, setProject] = useState<ProjectType>('aokn');
+  const defaultProject = settings?.defaultProject ?? 'aokn';
+  const showProjectOption = settings?.showProjectOption ?? true;
+  const [project, setProject] = useState<ProjectType>(defaultProject);
   const [prompt, setPrompt] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setProject(defaultProject);
+  }, [defaultProject]);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -59,28 +65,41 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    const projectToUse = showProjectOption ? project : defaultProject;
     const result = await ai.generate(
       prompt,
       selectedType,
       settings,
       images.length ? images : undefined,
-      project
+      projectToUse
     );
     if (result) {
       onGenerated(result);
     }
   };
 
-  const canGenerate = settings?.apiKey && prompt.trim().length > 0;
+  const hasApiKey = Boolean(
+    settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey
+  );
+  const canGenerate = hasApiKey && prompt.trim().length > 0;
 
   return (
-    <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+    <Paper
+      elevation={0}
+      sx={{
+        p: 3,
+        bgcolor: 'background.paper',
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <AutoAwesomeIcon color="primary" />
-        Mit KI generieren
+        <AddCircleOutlineIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+        Neue Story erstellen
       </Typography>
 
-      {!settings?.apiKey && (
+      {!hasApiKey && (
         <Alert severity="info" sx={{ mb: 2 }}>
           API-Key in den Einstellungen hinterlegen, um die KI-Generierung zu nutzen.
         </Alert>
@@ -109,28 +128,30 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         </ToggleButtonGroup>
       </Box>
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
-          Projekt
-        </Typography>
-        <ToggleButtonGroup
-          value={project}
-          exclusive
-          onChange={(_, v) => v && setProject(v)}
-          fullWidth
-          size="small"
-          sx={{
-            bgcolor: 'action.hover',
-            borderRadius: 1.5,
-            p: 0.5,
-            '& .MuiToggleButton-root': { border: 'none', py: 1, textTransform: 'none', fontWeight: 600 },
-            '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText' },
-          }}
-        >
-          <ToggleButton value="aokn">AOKN</ToggleButton>
-          <ToggleButton value="healthmatch">HealthMatch</ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+      {showProjectOption && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+            Projekt
+          </Typography>
+          <ToggleButtonGroup
+            value={project}
+            exclusive
+            onChange={(_, v) => v && setProject(v)}
+            fullWidth
+            size="small"
+            sx={{
+              bgcolor: 'action.hover',
+              borderRadius: 1.5,
+              p: 0.5,
+              '& .MuiToggleButton-root': { border: 'none', py: 1, textTransform: 'none', fontWeight: 600 },
+              '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText' },
+            }}
+          >
+            <ToggleButton value="aokn">AOKN</ToggleButton>
+            <ToggleButton value="healthmatch">HealthMatch</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
 
       <Box sx={{ mb: 2 }}>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -208,12 +229,12 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
       <Button
         variant="contained"
         fullWidth
-        startIcon={ai.isLoading ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
+        startIcon={ai.isLoading ? <CircularProgress size={20} color="inherit" /> : <AddCircleOutlineIcon />}
         onClick={handleGenerate}
         disabled={!canGenerate || ai.isLoading}
         sx={{ py: 1.5 }}
       >
-        {ai.isLoading ? 'Generiere...' : 'Generieren'}
+        {ai.isLoading ? 'Wird erstellt…' : 'Story erstellen'}
       </Button>
 
       {ai.error && (

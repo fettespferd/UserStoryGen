@@ -16,12 +16,27 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel } from '../types/story';
+import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel, BackgroundOption, FontOption, ProjectType } from '../types/story';
 import type { UseStorageReturn } from '../hooks/useStorage';
 import { FolderAccessDialog } from './FolderAccessDialog';
 import { getDefaultSystemPrompt } from '../hooks/useAIGenerator';
+import bgAnnie from '../../assets/annie-spratt-QckxruozjRg-unsplash.jpg';
+import bgEmile from '../../assets/emile-perron-xrVDYZRGdw4-unsplash.jpg';
+import bgHoward from '../../assets/howard-bouchevereau-RSCirJ70NDM-unsplash.jpg';
+import bgKari from '../../assets/kari-shea-1SAnrIxw5OY-unsplash.jpg';
+import bgNubelson from '../../assets/nubelson-fernandes--Xqckh_XVU4-unsplash.jpg';
+
+const BG_IMAGE_URLS: Record<string, string> = {
+  'image-annie': bgAnnie,
+  'image-emile': bgEmile,
+  'image-howard': bgHoward,
+  'image-kari': bgKari,
+  'image-nubelson': bgNubelson,
+};
 
 interface SettingsProps {
   storage: UseStorageReturn;
@@ -62,6 +77,10 @@ export function Settings({
   const [vitagroupAccessibilityUrl, setVitagroupAccessibilityUrl] = useState(
     settings?.tenantLinks?.vitagroup?.accessibilityPage ?? ''
   );
+  const [background, setBackground] = useState<BackgroundOption>(settings?.background ?? 'plain-dark');
+  const [font, setFont] = useState<FontOption>(settings?.font ?? 'source-sans-3');
+  const [defaultProject, setDefaultProject] = useState<ProjectType>(settings?.defaultProject ?? 'aokn');
+  const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false);
@@ -80,6 +99,14 @@ export function Settings({
       setCustomSystemPromptEN(settings.customSystemPromptEN ?? '');
       setAoknAccessibilityUrl(settings.tenantLinks?.aokn?.accessibilityPage ?? '');
       setVitagroupAccessibilityUrl(settings.tenantLinks?.vitagroup?.accessibilityPage ?? '');
+      const bg = settings.background ?? 'plain-dark';
+      const validBg = ['plain-dark','plain-navy','plain-forest','plain-burgundy','plain-slate','plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach','image-annie','image-emile','image-howard','image-kari','image-nubelson'].includes(bg)
+        ? bg
+        : 'plain-dark';
+      setBackground(validBg);
+      setFont(settings.font ?? 'source-sans-3');
+      setDefaultProject(settings.defaultProject ?? 'aokn');
+      setShowProjectOption(settings.showProjectOption ?? true);
     }
   }, [settings]);
 
@@ -124,6 +151,10 @@ export function Settings({
         aokn: aoknAccessibilityUrl.trim() ? { accessibilityPage: aoknAccessibilityUrl.trim() } : undefined,
         vitagroup: vitagroupAccessibilityUrl.trim() ? { accessibilityPage: vitagroupAccessibilityUrl.trim() } : undefined,
       },
+      background,
+      font,
+      defaultProject,
+      showProjectOption,
     };
     onSettingsChange(next);
     if (storage.hasAccess) {
@@ -136,7 +167,16 @@ export function Settings({
   };
 
   return (
-    <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
+    <Paper
+      elevation={0}
+      sx={{
+        p: 3,
+        bgcolor: 'background.paper',
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
       <Typography variant="h6" gutterBottom>
         Einstellungen
       </Typography>
@@ -194,6 +234,10 @@ export function Settings({
                     label="Modell"
                     onChange={(e) => setModelOpenAI(e.target.value as OpenAIModel)}
                   >
+                    <MenuItem value="gpt-5.4">GPT-5.4 (neuestes, Reasoning)</MenuItem>
+                    <MenuItem value="gpt-4.1">GPT-4.1 (Flagship)</MenuItem>
+                    <MenuItem value="gpt-4.1-mini">GPT-4.1 mini (schnell, günstig)</MenuItem>
+                    <MenuItem value="o4-mini">o4-mini (Reasoning, effizient)</MenuItem>
                     <MenuItem value="gpt-4o">GPT-4o (schnell, vision)</MenuItem>
                     <MenuItem value="gpt-4o-mini">GPT-4o mini (günstig, vision)</MenuItem>
                     <MenuItem value="gpt-4-turbo">GPT-4 Turbo</MenuItem>
@@ -222,6 +266,11 @@ export function Settings({
                     label="Modell"
                     onChange={(e) => setModelAnthropic(e.target.value as AnthropicModel)}
                   >
+                    <MenuItem value="claude-sonnet-4-6">Claude Sonnet 4.6 (neuestes)</MenuItem>
+                    <MenuItem value="claude-opus-4-6">Claude Opus 4.6 (Flagship)</MenuItem>
+                    <MenuItem value="claude-haiku-4-5">Claude Haiku 4.5 (leicht)</MenuItem>
+                    <MenuItem value="claude-sonnet-4">Claude Sonnet 4</MenuItem>
+                    <MenuItem value="claude-opus-4">Claude Opus 4</MenuItem>
                     <MenuItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</MenuItem>
                     <MenuItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</MenuItem>
                     <MenuItem value="claude-3-opus-20240229">Claude 3 Opus</MenuItem>
@@ -259,6 +308,98 @@ export function Settings({
           )}
         </Box>
 
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Hintergrund
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Farbe oder Bild für die Hauptansicht.
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {(['plain-dark', 'plain-navy', 'plain-forest', 'plain-burgundy', 'plain-slate', 'plain-light', 'plain-cream', 'plain-sky', 'plain-mint', 'plain-lavender', 'plain-peach'] as const).map((opt) => (
+              <Box
+                key={opt}
+                onClick={() => setBackground(opt)}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 1,
+                  bgcolor: {
+                    'plain-dark': '#1a1a1a',
+                    'plain-navy': '#0f172a',
+                    'plain-forest': '#0f1f12',
+                    'plain-burgundy': '#1a0f12',
+                    'plain-slate': '#1e293b',
+                    'plain-light': '#f0f0f0',
+                    'plain-cream': '#fef5e7',
+                    'plain-sky': '#e3f2fd',
+                    'plain-mint': '#e8f5e9',
+                    'plain-lavender': '#f3e5f5',
+                    'plain-peach': '#ffebe6',
+                  }[opt],
+                  border: '2px solid',
+                  borderColor: background === opt ? 'primary.main' : ['plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach'].includes(opt) ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
+                  cursor: 'pointer',
+                  '&:hover': { opacity: 0.9 },
+                }}
+                title={{
+                  'plain-dark': 'Dunkel',
+                  'plain-navy': 'Navy',
+                  'plain-forest': 'Wald',
+                  'plain-burgundy': 'Bordeaux',
+                  'plain-slate': 'Schiefer',
+                  'plain-light': 'Hell',
+                  'plain-cream': 'Creme',
+                  'plain-sky': 'Himmel',
+                  'plain-mint': 'Minze',
+                  'plain-lavender': 'Lavendel',
+                  'plain-peach': 'Pfirsich',
+                }[opt]}
+              />
+            ))}
+            {(['image-annie', 'image-emile', 'image-howard', 'image-kari', 'image-nubelson'] as const).map((opt) => (
+              <Box
+                key={opt}
+                component="img"
+                src={BG_IMAGE_URLS[opt]}
+                alt=""
+                onClick={() => setBackground(opt)}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 1,
+                  objectFit: 'cover',
+                  border: '2px solid',
+                  borderColor: background === opt ? 'primary.main' : 'transparent',
+                  cursor: 'pointer',
+                  '&:hover': { opacity: 0.9 },
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
+
+        <FormControl fullWidth size="small">
+          <InputLabel>Schriftart</InputLabel>
+          <Select
+            value={font}
+            label="Schriftart"
+            onChange={(e) => setFont(e.target.value as FontOption)}
+            sx={{ '& .MuiSelect-select': { fontFamily: 'inherit' } }}
+          >
+            <MenuItem value="source-sans-3" sx={{ fontFamily: '"Source Sans 3", sans-serif' }}>Source Sans 3</MenuItem>
+            <MenuItem value="inter" sx={{ fontFamily: '"Inter", sans-serif' }}>Inter</MenuItem>
+            <MenuItem value="ibm-plex-sans" sx={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>IBM Plex Sans</MenuItem>
+            <MenuItem value="open-sans" sx={{ fontFamily: '"Open Sans", sans-serif' }}>Open Sans</MenuItem>
+            <MenuItem value="lato" sx={{ fontFamily: '"Lato", sans-serif' }}>Lato</MenuItem>
+            <MenuItem value="work-sans" sx={{ fontFamily: '"Work Sans", sans-serif' }}>Work Sans</MenuItem>
+            <MenuItem value="nunito" sx={{ fontFamily: '"Nunito", sans-serif' }}>Nunito</MenuItem>
+            <MenuItem value="plus-jakarta-sans" sx={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>Plus Jakarta Sans</MenuItem>
+            <MenuItem value="outfit" sx={{ fontFamily: '"Outfit", sans-serif' }}>Outfit</MenuItem>
+            <MenuItem value="manrope" sx={{ fontFamily: '"Manrope", sans-serif' }}>Manrope</MenuItem>
+          </Select>
+        </FormControl>
+
         <FormControl fullWidth size="small">
           <InputLabel>Standard-Sprache</InputLabel>
           <Select
@@ -282,6 +423,35 @@ export function Settings({
             <MenuItem value="bug">Bug Report</MenuItem>
           </Select>
         </FormControl>
+
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Projekt (bei neuer Story)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Standard-Projekt und ob die Auswahl angezeigt wird. Nicht alle Product Owner benötigen AOKN/HealthMatch.
+          </Typography>
+          <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+            <InputLabel>Standard-Projekt</InputLabel>
+            <Select
+              value={defaultProject}
+              label="Standard-Projekt"
+              onChange={(e) => setDefaultProject(e.target.value as ProjectType)}
+            >
+              <MenuItem value="aokn">AOKN</MenuItem>
+              <MenuItem value="healthmatch">HealthMatch</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showProjectOption}
+                onChange={(e) => setShowProjectOption(e.target.checked)}
+              />
+            }
+            label="Projekt-Auswahl bei neuer Story anzeigen"
+          />
+        </Box>
 
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>

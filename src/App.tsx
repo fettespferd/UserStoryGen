@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ThemeProvider,
   createTheme,
@@ -40,20 +40,77 @@ import { BugEditor } from './components/BugEditor';
 import { Settings } from './components/Settings';
 import { AIGenerator } from './components/AIGenerator';
 
-import type { StoryItem, UserStory, BugReport, Settings as SettingsType } from './types/story';
+import type { StoryItem, UserStory, BugReport, Settings as SettingsType, FontOption } from './types/story';
 
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: { main: '#3B82F6' },
-    background: { default: '#0F172A', paper: '#1E293B' },
-    text: { primary: '#FFFFFF', secondary: '#94A3B8' },
-  },
-  components: {
-    MuiButton: { styleOverrides: { root: { borderRadius: 8 } } },
-    MuiPaper: { styleOverrides: { root: { borderRadius: 12 } } },
-  },
-});
+import bgAnnie from '../assets/annie-spratt-QckxruozjRg-unsplash.jpg';
+import bgEmile from '../assets/emile-perron-xrVDYZRGdw4-unsplash.jpg';
+import bgHoward from '../assets/howard-bouchevereau-RSCirJ70NDM-unsplash.jpg';
+import bgKari from '../assets/kari-shea-1SAnrIxw5OY-unsplash.jpg';
+import bgNubelson from '../assets/nubelson-fernandes--Xqckh_XVU4-unsplash.jpg';
+
+const BACKGROUND_IMAGES: Record<string, string> = {
+  annie: bgAnnie,
+  emile: bgEmile,
+  howard: bgHoward,
+  kari: bgKari,
+  nubelson: bgNubelson,
+};
+
+const PLAIN_COLORS: Record<string, string> = {
+  dark: '#1a1a1a',
+  navy: '#0f172a',
+  forest: '#0f1f12',
+  burgundy: '#1a0f12',
+  slate: '#1e293b',
+  light: '#f0f0f0',
+  cream: '#fef5e7',
+  sky: '#e3f2fd',
+  mint: '#e8f5e9',
+  lavender: '#f3e5f5',
+  peach: '#ffebe6',
+};
+
+const LIGHT_BACKGROUNDS = ['plain-light', 'plain-cream', 'plain-sky', 'plain-mint', 'plain-lavender', 'plain-peach'];
+
+const FONT_FAMILIES: Record<FontOption, string> = {
+  'source-sans-3': '"Source Sans 3", system-ui, sans-serif',
+  inter: '"Inter", system-ui, sans-serif',
+  'ibm-plex-sans': '"IBM Plex Sans", system-ui, sans-serif',
+  'open-sans': '"Open Sans", system-ui, sans-serif',
+  lato: '"Lato", system-ui, sans-serif',
+  'work-sans': '"Work Sans", system-ui, sans-serif',
+  nunito: '"Nunito", system-ui, sans-serif',
+  'plus-jakarta-sans': '"Plus Jakarta Sans", system-ui, sans-serif',
+  outfit: '"Outfit", system-ui, sans-serif',
+  manrope: '"Manrope", system-ui, sans-serif',
+};
+
+function createAppTheme(font: FontOption, isLightMode: boolean) {
+  return createTheme({
+    typography: {
+      fontFamily: FONT_FAMILIES[font] ?? FONT_FAMILIES['source-sans-3'],
+    },
+    palette: isLightMode
+      ? {
+          mode: 'light',
+          primary: { main: '#8B6914' },
+          secondary: { main: '#6B5344' },
+          background: { default: '#f5f5f5', paper: '#ffffff' },
+          text: { primary: '#1a1a1a', secondary: '#5c5c5c' },
+        }
+      : {
+          mode: 'dark',
+          primary: { main: '#C9A962' },
+          secondary: { main: '#8B7355' },
+          background: { default: '#141210', paper: '#1E1B18' },
+          text: { primary: '#F5F0E8', secondary: '#A89F94' },
+        },
+    components: {
+      MuiButton: { styleOverrides: { root: { borderRadius: 6, textTransform: 'none' } } },
+      MuiPaper: { styleOverrides: { root: { borderRadius: 8 } } },
+    },
+  });
+}
 
 function App() {
   const muiTheme = useTheme();
@@ -122,11 +179,56 @@ function App() {
   const isStory = currentItem?.type === 'user-story';
   const isBug = currentItem?.type === 'bug-report';
 
+  const isLightMode = LIGHT_BACKGROUNDS.includes(settings?.background ?? '');
+  const theme = useMemo(
+    () => createAppTheme((settings?.font ?? 'source-sans-3') as FontOption, isLightMode),
+    [settings?.font, settings?.background]
+  );
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-        <AppBar position="static" color="transparent" elevation={0}>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          position: 'relative',
+          ...(function () {
+            const bg = settings?.background ?? 'plain-dark';
+            if (bg.startsWith('plain-')) {
+              const color = PLAIN_COLORS[bg.replace('plain-', '')] ?? PLAIN_COLORS.dark;
+              return { bgcolor: color };
+            }
+            const imgKey = bg.replace('image-', '');
+            const imgUrl = BACKGROUND_IMAGES[imgKey];
+            if (imgUrl) {
+              return {
+                '&::before': {
+                  content: '""',
+                  position: 'fixed',
+                  inset: 0,
+                  backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.92) 0%, rgba(20,18,16,0.85) 50%, rgba(20,18,16,0.95) 100%), url(${imgUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 0,
+                },
+              };
+            }
+            return { bgcolor: PLAIN_COLORS.dark };
+          })(),
+        }}
+      >
+        <AppBar
+          position="static"
+          color="transparent"
+          elevation={0}
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
           <Toolbar>
             {currentView === 'settings' ? (
               <IconButton
@@ -172,7 +274,7 @@ function App() {
         </AppBar>
 
         {currentView === 'settings' ? (
-          <Container maxWidth="md" sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
+          <Container maxWidth="md" sx={{ py: 4, px: { xs: 2, sm: 3 }, position: 'relative', zIndex: 1 }}>
             <Settings
               storage={storage}
               settings={settings}
@@ -184,7 +286,7 @@ function App() {
             />
           </Container>
         ) : (
-        <Container maxWidth={false} sx={{ py: 4, px: { xs: 1, sm: 3 } }}>
+        <Container maxWidth={false} sx={{ py: 4, px: { xs: 1, sm: 3 }, position: 'relative', zIndex: 1 }}>
           {!storage.hasAccess && storage.isSupported && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               Ordner auswählen (Einstellungen → Ordner auswählen), damit Stories im Dateisystem gespeichert werden. Ohne Ordner gehen alle Daten bei Reload verloren.
@@ -339,7 +441,15 @@ function App() {
                   )}
                 </>
               ) : store.items.length > 0 ? (
-                <Box sx={{ bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+                <Box
+                sx={{
+                  bgcolor: 'background.paper',
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  overflow: 'hidden',
+                }}
+                >
                   <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, pt: 2, pb: 1, fontWeight: 600 }}>
                     Gespeicherte Stories
                   </Typography>
