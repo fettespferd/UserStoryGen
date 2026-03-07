@@ -3,6 +3,7 @@ import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTi
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TranslateIcon from '@mui/icons-material/Translate';
 import { EditableField } from './EditableField';
 import { MarkdownPreview } from './MarkdownPreview';
 import type { BugReport, Settings } from '../types/story';
@@ -40,6 +41,15 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
       store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
       setFullRegenOpen(false);
       setFullRegenPrompt('');
+    }
+  };
+
+  const handleTranslateTitle = async () => {
+    if (!item || !settings?.apiKey) return;
+    const updated = await ai.translateBugTitleToEN(item, settings);
+    if (updated) {
+      store.setCurrentItem(updated);
+      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
     }
   };
 
@@ -104,6 +114,18 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               placeholder="Titel"
               sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
             />
+            {isDe && (
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={ai.isLoading ? undefined : <TranslateIcon />}
+                onClick={handleTranslateTitle}
+                disabled={!settings?.apiKey || ai.isLoading}
+                title="Titel ins Englische übersetzen"
+              >
+                {ai.isLoading ? '…' : 'Titel übersetzen'}
+              </Button>
+            )}
             <Button
               size="small"
               startIcon={<AutoAwesomeIcon />}

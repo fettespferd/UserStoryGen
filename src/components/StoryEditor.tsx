@@ -481,10 +481,10 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
           <Typography variant="h5">User Story</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
             <TextField
-              value={item.title}
-              onChange={(e) => store.updateField('title', e.target.value)}
+              value={tab === 0 ? item.title : (item.titleEN ?? item.title)}
+              onChange={(e) => store.updateField(tab === 0 ? 'title' : 'titleEN', e.target.value)}
               size="small"
-              placeholder="Titel"
+              placeholder={tab === 0 ? 'Titel (DE)' : 'Title (EN)'}
               sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
             />
             <Button

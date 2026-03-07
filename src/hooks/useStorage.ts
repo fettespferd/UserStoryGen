@@ -132,10 +132,16 @@ export function useStorage(): UseStorageReturn {
         const fromFolder = JSON.parse(text) as Settings;
         if (fromFolder) {
           const envKey = typeof import.meta.env.VITE_API_KEY === 'string' ? import.meta.env.VITE_API_KEY : undefined;
+          const envKeyOpenAI = typeof import.meta.env.VITE_API_KEY_OPENAI === 'string' ? import.meta.env.VITE_API_KEY_OPENAI : undefined;
+          const envKeyAnthropic = typeof import.meta.env.VITE_API_KEY_ANTHROPIC === 'string' ? import.meta.env.VITE_API_KEY_ANTHROPIC : undefined;
           const merged: Settings = {
             ...fromFolder,
             apiKey: fromFolder.apiKey || fromLocal?.apiKey || envKey || undefined,
+            apiKeyOpenAI: fromFolder.apiKeyOpenAI || fromLocal?.apiKeyOpenAI || envKeyOpenAI || (fromFolder.provider === 'openai' ? (fromFolder.apiKey || envKey) : undefined) || undefined,
+            apiKeyAnthropic: fromFolder.apiKeyAnthropic || fromLocal?.apiKeyAnthropic || envKeyAnthropic || (fromFolder.provider === 'anthropic' ? (fromFolder.apiKey || envKey) : undefined) || undefined,
             customSystemPrompt: fromFolder.customSystemPrompt || fromLocal?.customSystemPrompt || undefined,
+            customSystemPromptDE: fromFolder.customSystemPromptDE ?? fromLocal?.customSystemPromptDE ?? (fromFolder.customSystemPrompt || fromLocal?.customSystemPrompt) ?? undefined,
+            customSystemPromptEN: fromFolder.customSystemPromptEN ?? fromLocal?.customSystemPromptEN ?? (fromFolder.customSystemPrompt || fromLocal?.customSystemPrompt) ?? undefined,
           };
           localStorage.setItem(SETTINGS_LOCAL_KEY, JSON.stringify(merged));
           return merged;
@@ -145,15 +151,24 @@ export function useStorage(): UseStorageReturn {
       // folder load failed, fall through to localStorage
     }
     const envKey = typeof import.meta.env.VITE_API_KEY === 'string' ? import.meta.env.VITE_API_KEY : undefined;
+    const envKeyOpenAI = typeof import.meta.env.VITE_API_KEY_OPENAI === 'string' ? import.meta.env.VITE_API_KEY_OPENAI : undefined;
+    const envKeyAnthropic = typeof import.meta.env.VITE_API_KEY_ANTHROPIC === 'string' ? import.meta.env.VITE_API_KEY_ANTHROPIC : undefined;
     if (fromLocal) {
-      return { ...fromLocal, apiKey: fromLocal.apiKey || envKey || undefined } as Settings;
+      return {
+        ...fromLocal,
+        apiKey: fromLocal.apiKey || envKey || undefined,
+        apiKeyOpenAI: fromLocal.apiKeyOpenAI || envKeyOpenAI || (fromLocal.provider === 'openai' ? envKey : undefined) || undefined,
+        apiKeyAnthropic: fromLocal.apiKeyAnthropic || envKeyAnthropic || (fromLocal.provider === 'anthropic' ? envKey : undefined) || undefined,
+      } as Settings;
     }
-    if (envKey) {
+    if (envKey || envKeyOpenAI || envKeyAnthropic) {
       return {
         provider: 'openai',
         defaultLang: 'de',
         defaultTicketType: 'user-story',
-        apiKey: envKey,
+        apiKey: envKey || undefined,
+        apiKeyOpenAI: envKeyOpenAI || envKey || undefined,
+        apiKeyAnthropic: envKeyAnthropic || undefined,
       } as Settings;
     }
     return fromLocal;

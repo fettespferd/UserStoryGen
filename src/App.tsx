@@ -13,7 +13,6 @@ import {
   ListItemButton,
   ListItemText,
   IconButton,
-  Drawer,
   useTheme,
   useMediaQuery,
   Alert,
@@ -28,6 +27,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import BugReportIcon from '@mui/icons-material/BugReport';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
@@ -64,7 +64,7 @@ function App() {
   const ai = useAIGenerator();
 
   const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'main' | 'settings'>('main');
   const [storyLangTab, setStoryLangTab] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -128,21 +128,51 @@ function App() {
       <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
         <AppBar position="static" color="transparent" elevation={0}>
           <Toolbar>
-            <DescriptionIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              UserStoryGen
-            </Typography>
+            {currentView === 'settings' ? (
+              <IconButton
+                edge="start"
+                color="inherit"
+                onClick={() => setCurrentView('main')}
+                sx={{ mr: 1 }}
+                title="Zurück"
+              >
+                <ArrowBackIcon />
+              </IconButton>
+            ) : null}
+            <Box
+              component="button"
+              onClick={() => setCurrentView('main')}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'inherit',
+                mr: 1,
+              }}
+            >
+              <DescriptionIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+              <Typography variant="h6" component="span">
+                UserStoryGen
+              </Typography>
+            </Box>
+            <Box sx={{ flexGrow: 1 }} />
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <SettingsIcon
-                sx={{ cursor: 'pointer' }}
-                onClick={() => setSettingsOpen(true)}
-              />
+              <IconButton
+                color="inherit"
+                onClick={() => setCurrentView(currentView === 'settings' ? 'main' : 'settings')}
+                title="Einstellungen"
+                sx={{ opacity: currentView === 'settings' ? 1 : 0.8 }}
+              >
+                <SettingsIcon />
+              </IconButton>
             </Box>
           </Toolbar>
         </AppBar>
 
-        <Drawer anchor="right" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
-          <Box sx={{ width: 360, p: 2 }}>
+        {currentView === 'settings' ? (
+          <Container maxWidth="md" sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
             <Settings
               storage={storage}
               settings={settings}
@@ -152,9 +182,8 @@ function App() {
                 storage.loadStories(handle).then((items) => store.setItems(items));
               }}
             />
-          </Box>
-        </Drawer>
-
+          </Container>
+        ) : (
         <Container maxWidth={false} sx={{ py: 4, px: { xs: 1, sm: 3 } }}>
           {!storage.hasAccess && storage.isSupported && (
             <Alert severity="warning" sx={{ mb: 2 }}>
@@ -190,12 +219,19 @@ function App() {
                     >
                       Zurück
                     </Button>
-                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-                      {isStory ? 'User Story' : 'Bug Report'}
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2 }} noWrap title={currentItem.type === 'user-story' ? (currentItem as UserStory).title : (currentItem as BugReport).title}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      {isStory ? (
+                        <DescriptionIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      ) : (
+                        <BugReportIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      )}
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {isStory ? 'User Story' : 'Bug Report'}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2 }} noWrap title={currentItem.type === 'user-story' ? ((currentItem as UserStory).titleEN ?? (currentItem as UserStory).title) : (currentItem as BugReport).title}>
                       {currentItem.type === 'user-story'
-                        ? (currentItem as UserStory).title || 'Ohne Titel'
+                        ? (storyLangTab === 1 ? (currentItem as UserStory).titleEN ?? (currentItem as UserStory).title : (currentItem as UserStory).title) || 'Ohne Titel'
                         : (currentItem as BugReport).title || 'Ohne Titel'}
                     </Typography>
                     {isStory && (
@@ -227,36 +263,48 @@ function App() {
                         {store.items
                           .filter((i) => i.id !== currentItem.id)
                           .slice(0, 8)
-                          .map((item) => (
-                            <ListItem key={item.id} disablePadding secondaryAction={
-                              <IconButton
-                                edge="end"
-                                size="small"
-                                onClick={(e) => handleDeleteClick(e, item.id)}
-                                color="error"
-                                sx={{ opacity: 0.7, '&:hover': { opacity: 1 } }}
-                                title="Löschen"
+                          .map((item) => {
+                            const isBug = item.type === 'bug-report';
+                            const title = isBug
+                              ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
+                              : (item as UserStory).title || `Story ${item.id.slice(-7)}`;
+                            const TypeIcon = isBug ? BugReportIcon : DescriptionIcon;
+                            return (
+                              <ListItem
+                                key={item.id}
+                                disablePadding
+                                secondaryAction={
+                                  <IconButton
+                                    edge="end"
+                                    size="small"
+                                    onClick={(e) => handleDeleteClick(e, item.id)}
+                                    color="error"
+                                    sx={{ opacity: 0.7, '&:hover': { opacity: 1 } }}
+                                    title="Löschen"
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                }
+                                sx={{ alignItems: 'stretch' }}
                               >
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            }>
-                              <ListItemButton
-                                onClick={() => {
-                                  store.loadItem(item.id);
-                                  setStoryLangTab(0);
-                                }}
-                              >
-                                <ListItemText
-                                  primary={
-                                    item.type === 'bug-report'
-                                      ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
-                                      : (item as UserStory).title || `Story ${item.id.slice(-7)}`
-                                  }
-                                  primaryTypographyProps={{ variant: 'body2', noWrap: true }}
-                                />
-                              </ListItemButton>
-                            </ListItem>
-                          ))}
+                                <ListItemButton
+                                  onClick={() => {
+                                    store.loadItem(item.id);
+                                    setStoryLangTab(0);
+                                  }}
+                                  sx={{ py: 1, gap: 1.5 }}
+                                >
+                                  <TypeIcon sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0 }} />
+                                  <ListItemText
+                                    primary={title}
+                                    secondary={isBug ? `Bug ${(item as BugReport).lang}` : 'User Story'}
+                                    primaryTypographyProps={{ variant: 'body2', noWrap: true, fontWeight: 500 }}
+                                    secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                                  />
+                                </ListItemButton>
+                              </ListItem>
+                            );
+                          })}
                       </List>
                     </Box>
                   )}
@@ -296,38 +344,48 @@ function App() {
                     Gespeicherte Stories
                   </Typography>
                   <List dense disablePadding sx={{ pb: 2 }}>
-                    {store.items.map((item) => (
-                      <ListItem key={item.id} disablePadding secondaryAction={
-                        <IconButton
-                          edge="end"
-                          size="small"
-                          onClick={(e) => handleDeleteClick(e, item.id)}
-                          color="error"
-                          sx={{ mr: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
-                          title="Löschen"
+                    {store.items.map((item) => {
+                      const isBug = item.type === 'bug-report';
+                      const title = isBug
+                        ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
+                        : (item as UserStory).title || `Story ${item.id.slice(-7)}`;
+                      const TypeIcon = isBug ? BugReportIcon : DescriptionIcon;
+                      return (
+                        <ListItem
+                          key={item.id}
+                          disablePadding
+                          secondaryAction={
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={(e) => handleDeleteClick(e, item.id)}
+                              color="error"
+                              sx={{ mr: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
+                              title="Löschen"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          }
+                          sx={{ alignItems: 'stretch' }}
                         >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      }>
-                        <ListItemButton
-                          onClick={() => {
-                            store.loadItem(item.id);
-                            setStoryLangTab(0);
-                          }}
-                          sx={{ py: 1.5 }}
-                        >
-                          <ListItemText
-                            primary={
-                              item.type === 'bug-report'
-                                ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
-                                : (item as UserStory).title || `Story ${item.id.slice(-7)}`
-                            }
-                            secondary={item.type === 'user-story' ? 'User Story' : `Bug ${(item as BugReport).lang}`}
-                            primaryTypographyProps={{ variant: 'body1', fontWeight: 500 }}
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
+                          <ListItemButton
+                            onClick={() => {
+                              store.loadItem(item.id);
+                              setStoryLangTab(0);
+                            }}
+                            sx={{ py: 1.5, gap: 1.5 }}
+                          >
+                            <TypeIcon sx={{ fontSize: 22, color: 'text.secondary', flexShrink: 0 }} />
+                            <ListItemText
+                              primary={title}
+                              secondary={isBug ? `Bug ${(item as BugReport).lang}` : 'User Story'}
+                              primaryTypographyProps={{ variant: 'body1', fontWeight: 500, noWrap: true }}
+                              secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      );
+                    })}
                   </List>
                 </Box>
               ) : (
@@ -353,6 +411,7 @@ function App() {
             </Box>
           </Box>
         </Container>
+        )}
       </Box>
 
       <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>

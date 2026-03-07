@@ -48,6 +48,7 @@ export interface UserStory {
   id: string;
   type: 'user-story';
   title: string;
+  titleEN?: string;
   project?: ProjectType;
   de: UserStoryDEContent;
   en: UserStoryENContent;
@@ -94,6 +95,7 @@ export interface BugReport {
   /** Screenshots/Design-Bilder (base64) */
   images?: string[];
   title: string;
+  titleEN?: string;
   description: string;
   expectedResult: string;
   actualResult: string;
@@ -118,13 +120,28 @@ export interface TenantLinks {
 
 export type MarkdownLinkTenant = 'none' | 'aokn' | 'vitagroup';
 
+/** OpenAI-Modelle (Vision-fähig für Bildanalyse). */
+export type OpenAIModel = 'gpt-4o' | 'gpt-4o-mini' | 'gpt-4-turbo' | 'gpt-4';
+
+/** Claude-Modelle (Vision-fähig). */
+export type AnthropicModel = 'claude-3-5-sonnet-20241022' | 'claude-3-5-haiku-20241022' | 'claude-3-opus-20240229' | 'claude-3-sonnet-20240229' | 'claude-3-haiku-20240307';
+
 export interface Settings {
+  /** @deprecated Nutze apiKeyOpenAI / apiKeyAnthropic. Fallback für Migration. */
   apiKey?: string;
+  apiKeyOpenAI?: string;
+  apiKeyAnthropic?: string;
+  modelOpenAI?: OpenAIModel;
+  modelAnthropic?: AnthropicModel;
   provider: AIProvider;
   defaultLang: 'de' | 'en';
   defaultTicketType: 'user-story' | 'bug';
-  /** Optional: Custom system prompt for story generation. Overrides default when set. */
+  /** @deprecated Migration: wird in customSystemPromptDE/EN übernommen. */
   customSystemPrompt?: string;
+  /** Angepasster System-Prompt für Deutsch. Leer = Standard-Prompt. */
+  customSystemPromptDE?: string;
+  /** Angepasster System-Prompt für Englisch. Leer = Standard-Prompt. */
+  customSystemPromptEN?: string;
   /** Markdown-Überschriften: h1 (#), h2 (##), h3 (###). Standard: h3 für Jira/Confluence. */
   markdownHeadingLevel?: MarkdownHeadingLevel;
   /** Konfigurierbare Links pro Tenant (AOKN, Vitagroup). */

@@ -34,8 +34,9 @@ export function getDefaultSystemPrompt(lang: 'de' | 'en'): string {
   return lang === 'de' ? SYSTEM_PROMPT_DE : SYSTEM_PROMPT_EN;
 }
 
-function getSystemPrompt(lang: 'de' | 'en', customPrompt?: string): string {
-  if (customPrompt?.trim()) return customPrompt.trim();
+function getSystemPrompt(lang: 'de' | 'en', customDE?: string, customEN?: string): string {
+  const custom = lang === 'de' ? customDE : customEN;
+  if (custom?.trim()) return custom.trim();
   return getDefaultSystemPrompt(lang);
 }
 
@@ -114,6 +115,7 @@ export interface UseAIGeneratorReturn {
     settings: Settings | null
   ) => Promise<UserStory | null>;
   syncDEToEN: (item: UserStory, settings: Settings | null) => Promise<UserStory | null>;
+  translateBugTitleToEN: (item: BugReport, settings: Settings | null) => Promise<BugReport | null>;
   regenerateFullBugReport: (
     item: BugReport,
     prompt: string,
@@ -154,7 +156,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       options?: { promptPrefix?: string }
     ): Promise<UserStoryDE | UserStoryEN | BugReport | null> => {
       const lang = type.includes('de') ? 'de' : 'en';
-      const systemPrompt = getSystemPrompt(lang, settings.customSystemPrompt);
+      const systemPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
       let schema = '';
       if (type === 'user-story-de') schema = USER_STORY_DE_SCHEMA;
       else if (type === 'user-story-en') schema = USER_STORY_EN_SCHEMA;
@@ -166,12 +168,17 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       const userPrompt = `${basePrompt}\n\nAntworte mit JSON im folgenden Schema (id wird automatisch gesetzt):\n${schema}`;
       const userContent = images?.length ? buildMessageContent(userPrompt, images) : userPrompt;
 
+      const apiKeyOpenAI = settings.apiKeyOpenAI ?? settings.apiKey;
+      const apiKeyAnthropic = settings.apiKeyAnthropic ?? settings.apiKey;
+      const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+      const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+
       if (settings.provider === 'openai') {
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeyOpenAI}` },
           body: JSON.stringify({
-            model: images?.length ? 'gpt-4o' : 'gpt-4o-mini',
+            model: modelOpenAI,
             messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }],
             temperature: 0.3,
           }),
@@ -187,7 +194,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       const hasImages = images?.length;
       const body: Record<string, unknown> = hasImages
         ? {
-            model: 'claude-3-5-sonnet-20241022',
+            model: modelAnthropic,
             max_tokens: 4096,
             system: systemPrompt,
             messages: [{
@@ -203,7 +210,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
             }],
           }
         : {
-            model: 'claude-3-haiku-20240307',
+            model: modelAnthropic,
             max_tokens: 4096,
             system: systemPrompt,
             messages: [{ role: 'user', content: userPrompt }],
@@ -211,7 +218,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
 
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': settings.apiKey!, 'anthropic-version': '2023-06-01' },
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKeyAnthropic!, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -232,7 +239,11 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       images?: string[],
       project?: ProjectType
     ): Promise<StoryItem | null> => {
-      if (!settings?.apiKey) {
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) {
         setError('API-Key fehlt. Bitte in den Einstellungen hinterlegen.');
         return null;
       }
@@ -248,14 +259,18 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           const id = generateId();
           const title =
             (deResult as { title?: string }).title?.trim() ||
-            (enResult as { title?: string }).title?.trim() ||
             deResult.beschreibung?.slice(0, 60) ||
             'User Story';
+          const titleEN =
+            (enResult as { title?: string }).title?.trim() ||
+            (enResult as { description?: string }).description?.slice(0, 60) ||
+            title;
           const links = mergeToLinks(deResult, enResult);
           const userStory: UserStory = {
             id,
             type: 'user-story',
             title,
+            titleEN,
             project,
             copyBook: [],
             images: images ?? [],
@@ -298,7 +313,8 @@ export function useAIGenerator(): UseAIGeneratorReturn {
   const buildStoryContext = (item: UserStory): string => {
     const d = item.de;
     const e = item.en;
-    return `Aktueller Titel: ${item.title}
+    return `Aktueller Titel (DE): ${item.title}
+Aktueller Titel (EN): ${item.titleEN || item.title}
 
 Links (gemeinsam DE+EN): ${(item.links ?? []).join(' | ')}
 
@@ -321,7 +337,11 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
 
   const regenerateFullStory = useCallback(
     async (item: UserStory, prompt: string, settings: Settings | null): Promise<UserStory | null> => {
-      if (!settings?.apiKey || !prompt.trim()) return null;
+      if (!settings || !prompt.trim()) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
       setIsLoading(true);
       setError(null);
       try {
@@ -333,12 +353,16 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
         if (!deResult || !enResult) return null;
         const newTitle =
           (deResult as { title?: string }).title?.trim() ||
+          item.title;
+        const newTitleEN =
           (enResult as { title?: string }).title?.trim() ||
+          item.titleEN ||
           item.title;
         const links = mergeToLinks(deResult, enResult);
         const updated: UserStory = {
           ...item,
           title: newTitle,
+          titleEN: newTitleEN,
           links,
           de: {
             beschreibung: deResult.beschreibung,
@@ -370,12 +394,16 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
 
   const syncDEToEN = useCallback(
     async (item: UserStory, settings: Settings | null): Promise<UserStory | null> => {
-      if (!settings?.apiKey) return null;
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
       setIsLoading(true);
       setError(null);
       try {
         const d = item.de;
-        const deContent = `Übersetze diese deutsche User Story ins Englische. Behalte die gleiche Struktur und Qualität.
+        const deContent = `Übersetze diese deutsche User Story ins Englische. Behalte die gleiche Struktur und Qualität. Übersetze auch den Titel ins Englische.
 
 Deutsche Story:
 Titel: ${item.title}
@@ -389,10 +417,10 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
         const opts = { promptPrefix: 'Übersetze die folgende deutsche User Story ins Englische.' };
         const enResult = (await generateSingle(deContent, 'user-story-en', settings, undefined, opts)) as UserStoryEN | null;
         if (!enResult) return null;
-        const newTitle = (enResult as { title?: string }).title?.trim() || item.title;
+        const titleEN = (enResult as { title?: string }).title?.trim() || item.title;
         return {
           ...item,
-          title: newTitle,
+          titleEN,
           en: {
             description: enResult.description,
             acceptanceCriteria: enResult.acceptanceCriteria,
@@ -413,6 +441,58 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
     [generateSingle]
   );
 
+  const translateBugTitleToEN = useCallback(
+    async (item: BugReport, settings: Settings | null): Promise<BugReport | null> => {
+      if (!settings || item.lang !== 'de') return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const prompt = `Übersetze nur diesen deutschen Titel ins Englische. Antworte NUR mit dem englischen Titel, kein anderer Text.\n\nTitel: ${item.title}`;
+        let titleEN = item.title;
+        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.2,
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          titleEN = data.choices?.[0]?.message?.content?.trim() || item.title;
+        } else {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: modelAnthropic,
+              max_tokens: 100,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          titleEN = data.content?.[0]?.text?.trim() || item.title;
+        }
+        return { ...item, titleEN };
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const buildBugContext = (item: BugReport): string => {
     const isDe = item.lang === 'de';
     return `Aktueller Bug Report (${isDe ? 'Deutsch' : 'English'}):
@@ -429,7 +509,11 @@ ${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
 
   const regenerateFullBugReport = useCallback(
     async (item: BugReport, prompt: string, settings: Settings | null): Promise<BugReport | null> => {
-      if (!settings?.apiKey || !prompt.trim()) return null;
+      if (!settings || !prompt.trim()) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
       setIsLoading(true);
       setError(null);
       try {
@@ -442,6 +526,7 @@ ${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
         return {
           ...item,
           title: result.title,
+          titleEN: (result as BugReport).titleEN ?? item.titleEN,
           description: result.description,
           expectedResult: result.expectedResult,
           actualResult: result.actualResult,
@@ -463,25 +548,48 @@ ${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
 
   const regenerateSection = useCallback(
     async (lang: 'de' | 'en', section: string, prompt: string, settings: Settings | null): Promise<string | string[] | null> => {
-      if (!settings?.apiKey) return null;
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
       setIsLoading(true);
       setError(null);
       try {
-        const sysPrompt = getSystemPrompt(lang, settings.customSystemPrompt);
+        const sysPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
         const sectionLabel = section === 'links' ? 'Links/Ressourcen (Jira, Designs, APIs)' : section;
         const sectionPrompt = `Aktualisiere nur die Sektion "${sectionLabel}" basierend auf: ${prompt}\n\nAntworte NUR mit dem neuen Inhalt als JSON: für Einzeltext {"value":"..."}, für Array {"value":["...","..."]}.`;
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: sectionPrompt }],
-            temperature: 0.3,
-          }),
-        });
-        if (!res.ok) throw new Error('API Fehler');
-        const data = await res.json();
-        const text = data.choices?.[0]?.message?.content?.trim() ?? '';
+        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+        let text = '';
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: sectionPrompt }],
+              temperature: 0.3,
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.choices?.[0]?.message?.content?.trim() ?? '';
+        } else {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: modelAnthropic,
+              max_tokens: 1024,
+              system: sysPrompt,
+              messages: [{ role: 'user', content: sectionPrompt }],
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.content?.[0]?.text?.trim() ?? '';
+        }
         const match = text.match(/\{[^}]*"value"[^}]*\}/);
         if (!match) return null;
         const parsed = JSON.parse(match[0]) as { value: string | string[] };
@@ -501,7 +609,11 @@ ${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
       images: string[],
       settings: Settings | null
     ): Promise<{ elementName: string; textDE: string; textEN: string }[] | null> => {
-      if (!settings?.apiKey || !images.length) return null;
+      if (!settings || !images.length) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
 
       setIsLoading(true);
       setError(null);
@@ -515,6 +627,8 @@ Erstelle eine Liste mit:
 Antworte NUR mit gültigem JSON-Array: [{"elementName":"...","textDE":"...","textEN":"..."}]
 Keine anderen Texte.`;
 
+      const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+      const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
       try {
         if (settings.provider === 'openai') {
           const userContent = buildMessageContent(
@@ -525,10 +639,10 @@ Keine anderen Texte.`;
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${settings.apiKey}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-              model: 'gpt-4o',
+              model: modelOpenAI,
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userContent },
@@ -551,11 +665,11 @@ Keine anderen Texte.`;
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-api-key': settings.apiKey,
+            'x-api-key': apiKey,
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
+            model: modelAnthropic,
             max_tokens: 4096,
             system: systemPrompt,
             messages: [
@@ -595,7 +709,7 @@ Keine anderen Texte.`;
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, isLoading, error };
+  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, translateBugTitleToEN, extractCopyBook, isLoading, error };
 }
 
 function parseAIResponse(

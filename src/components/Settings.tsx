@@ -10,9 +10,15 @@ import {
   Select,
   MenuItem,
   Alert,
+  Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import type { Settings as SettingsType, AIProvider, MarkdownHeadingLevel } from '../types/story';
+import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel } from '../types/story';
 import type { UseStorageReturn } from '../hooks/useStorage';
 import { FolderAccessDialog } from './FolderAccessDialog';
 import { getDefaultSystemPrompt } from '../hooks/useAIGenerator';
@@ -39,16 +45,17 @@ export function Settings({
   onSettingsLoaded,
   onFolderSelected,
 }: SettingsProps) {
-  const [apiKey, setApiKey] = useState(settings?.apiKey ?? '');
+  const [apiKeyOpenAI, setApiKeyOpenAI] = useState(settings?.apiKeyOpenAI ?? settings?.apiKey ?? '');
+  const [apiKeyAnthropic, setApiKeyAnthropic] = useState(settings?.apiKeyAnthropic ?? '');
+  const [modelOpenAI, setModelOpenAI] = useState<OpenAIModel>(settings?.modelOpenAI ?? 'gpt-4o-mini');
+  const [modelAnthropic, setModelAnthropic] = useState<AnthropicModel>(settings?.modelAnthropic ?? 'claude-3-5-haiku-20241022');
   const [provider, setProvider] = useState<AIProvider>(settings?.provider ?? 'openai');
   const [defaultLang, setDefaultLang] = useState<'de' | 'en'>(settings?.defaultLang ?? 'de');
   const [defaultTicketType, setDefaultTicketType] = useState<'user-story' | 'bug'>(
     settings?.defaultTicketType ?? 'user-story'
   );
-  const [customSystemPrompt, setCustomSystemPrompt] = useState(settings?.customSystemPrompt ?? '');
-  const [markdownHeadingLevel, setMarkdownHeadingLevel] = useState<MarkdownHeadingLevel>(
-    settings?.markdownHeadingLevel ?? 'h3'
-  );
+  const [customSystemPromptDE, setCustomSystemPromptDE] = useState(settings?.customSystemPromptDE ?? settings?.customSystemPrompt ?? '');
+  const [customSystemPromptEN, setCustomSystemPromptEN] = useState(settings?.customSystemPromptEN ?? settings?.customSystemPrompt ?? '');
   const [aoknAccessibilityUrl, setAoknAccessibilityUrl] = useState(
     settings?.tenantLinks?.aokn?.accessibilityPage ?? ''
   );
@@ -57,15 +64,20 @@ export function Settings({
   );
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
+  const [apiKeyExpanded, setApiKeyExpanded] = useState(false);
+  const [resetPromptLang, setResetPromptLang] = useState<'de' | 'en' | null>(null);
 
   useEffect(() => {
     if (settings) {
-      setApiKey(settings.apiKey ?? '');
+      setApiKeyOpenAI(settings.apiKeyOpenAI ?? settings.apiKey ?? '');
+      setApiKeyAnthropic(settings.apiKeyAnthropic ?? (settings.provider === 'anthropic' ? settings.apiKey : undefined) ?? '');
+      setModelOpenAI(settings.modelOpenAI ?? 'gpt-4o-mini');
+      setModelAnthropic(settings.modelAnthropic ?? 'claude-3-5-haiku-20241022');
       setProvider(settings.provider);
       setDefaultLang(settings.defaultLang);
       setDefaultTicketType(settings.defaultTicketType);
-      setCustomSystemPrompt(settings.customSystemPrompt ?? '');
-      setMarkdownHeadingLevel(settings.markdownHeadingLevel ?? 'h3');
+      setCustomSystemPromptDE(settings.customSystemPromptDE ?? settings.customSystemPrompt ?? '');
+      setCustomSystemPromptEN(settings.customSystemPromptEN ?? '');
       setAoknAccessibilityUrl(settings.tenantLinks?.aokn?.accessibilityPage ?? '');
       setVitagroupAccessibilityUrl(settings.tenantLinks?.vitagroup?.accessibilityPage ?? '');
     }
@@ -99,12 +111,15 @@ export function Settings({
 
   const handleSave = async () => {
     const next: SettingsType = {
-      apiKey: apiKey || undefined,
+      apiKeyOpenAI: apiKeyOpenAI.trim() || undefined,
+      apiKeyAnthropic: apiKeyAnthropic.trim() || undefined,
+      modelOpenAI,
+      modelAnthropic,
       provider,
       defaultLang,
       defaultTicketType,
-      customSystemPrompt: customSystemPrompt.trim() || undefined,
-      markdownHeadingLevel,
+      customSystemPromptDE: customSystemPromptDE.trim() || undefined,
+      customSystemPromptEN: customSystemPromptEN.trim() || undefined,
       tenantLinks: {
         aokn: aoknAccessibilityUrl.trim() ? { accessibilityPage: aoknAccessibilityUrl.trim() } : undefined,
         vitagroup: vitagroupAccessibilityUrl.trim() ? { accessibilityPage: vitagroupAccessibilityUrl.trim() } : undefined,
@@ -134,6 +149,94 @@ export function Settings({
       )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <FormControl fullWidth size="small">
+          <InputLabel>KI-Provider</InputLabel>
+          <Select
+            value={provider}
+            label="KI-Provider"
+            onChange={(e) => setProvider(e.target.value as AIProvider)}
+          >
+            <MenuItem value="openai">ChatGPT</MenuItem>
+            <MenuItem value="anthropic">Claude</MenuItem>
+          </Select>
+        </FormControl>
+
+        <Box>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => setApiKeyExpanded(!apiKeyExpanded)}
+            sx={{ color: 'text.secondary', textTransform: 'none' }}
+          >
+            {apiKeyExpanded ? '▼' : '▶'} API-Keys & Modelle
+            {apiKeyOpenAI || apiKeyAnthropic ? ' (teilweise gesetzt)' : ' (nicht gesetzt)'}
+          </Button>
+          <Collapse in={apiKeyExpanded}>
+            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  ChatGPT (OpenAI)
+                </Typography>
+                <TextField
+                  label="API-Key"
+                  type="password"
+                  value={apiKeyOpenAI}
+                  onChange={(e) => setApiKeyOpenAI(e.target.value)}
+                  fullWidth
+                  size="small"
+                  placeholder="sk-..."
+                  sx={{ mb: 1 }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Modell</InputLabel>
+                  <Select
+                    value={modelOpenAI}
+                    label="Modell"
+                    onChange={(e) => setModelOpenAI(e.target.value as OpenAIModel)}
+                  >
+                    <MenuItem value="gpt-4o">GPT-4o (schnell, vision)</MenuItem>
+                    <MenuItem value="gpt-4o-mini">GPT-4o mini (günstig, vision)</MenuItem>
+                    <MenuItem value="gpt-4-turbo">GPT-4 Turbo</MenuItem>
+                    <MenuItem value="gpt-4">GPT-4</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Claude (Anthropic)
+                </Typography>
+                <TextField
+                  label="API-Key"
+                  type="password"
+                  value={apiKeyAnthropic}
+                  onChange={(e) => setApiKeyAnthropic(e.target.value)}
+                  fullWidth
+                  size="small"
+                  placeholder="sk-ant-..."
+                  sx={{ mb: 1 }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Modell</InputLabel>
+                  <Select
+                    value={modelAnthropic}
+                    label="Modell"
+                    onChange={(e) => setModelAnthropic(e.target.value as AnthropicModel)}
+                  >
+                    <MenuItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</MenuItem>
+                    <MenuItem value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</MenuItem>
+                    <MenuItem value="claude-3-opus-20240229">Claude 3 Opus</MenuItem>
+                    <MenuItem value="claude-3-sonnet-20240229">Claude 3 Sonnet</MenuItem>
+                    <MenuItem value="claude-3-haiku-20240307">Claude 3 Haiku</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Speichern nicht vergessen! Alternativ: .env.local mit VITE_API_KEY_OPENAI=... und VITE_API_KEY_ANTHROPIC=... anlegen.
+              </Typography>
+            </Box>
+          </Collapse>
+        </Box>
+
         <Box>
           <Button
             variant="outlined"
@@ -156,29 +259,6 @@ export function Settings({
           )}
         </Box>
 
-        <TextField
-          label="API-Key (OpenAI / Anthropic)"
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          fullWidth
-          size="small"
-          placeholder="sk-... oder aus .env.local (VITE_API_KEY)"
-          helperText="Speichern nicht vergessen! Alternativ: .env.local mit VITE_API_KEY=... anlegen und Dev-Server neu starten."
-        />
-
-        <FormControl fullWidth size="small">
-          <InputLabel>KI-Provider</InputLabel>
-          <Select
-            value={provider}
-            label="KI-Provider"
-            onChange={(e) => setProvider(e.target.value as AIProvider)}
-          >
-            <MenuItem value="openai">OpenAI (GPT)</MenuItem>
-            <MenuItem value="anthropic">Anthropic (Claude)</MenuItem>
-          </Select>
-        </FormControl>
-
         <FormControl fullWidth size="small">
           <InputLabel>Standard-Sprache</InputLabel>
           <Select
@@ -200,19 +280,6 @@ export function Settings({
           >
             <MenuItem value="user-story">User Story</MenuItem>
             <MenuItem value="bug">Bug Report</MenuItem>
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth size="small">
-          <InputLabel>Markdown-Überschriften</InputLabel>
-          <Select
-            value={markdownHeadingLevel}
-            label="Markdown-Überschriften"
-            onChange={(e) => setMarkdownHeadingLevel(e.target.value as MarkdownHeadingLevel)}
-          >
-            <MenuItem value="h1">H1 (#)</MenuItem>
-            <MenuItem value="h2">H2 (##)</MenuItem>
-            <MenuItem value="h3">H3 (###) – Standard für Jira/Confluence</MenuItem>
           </Select>
         </FormControl>
 
@@ -244,32 +311,67 @@ export function Settings({
 
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            System-Prompt (Leitplanken) für Story-Erstellung
+            System-Prompts (Leitplanken) für Story-Erstellung
           </Typography>
-          <TextField
-            value={customSystemPrompt}
-            onChange={(e) => setCustomSystemPrompt(e.target.value)}
-            multiline
-            minRows={6}
-            fullWidth
-            size="small"
-            placeholder="Leer = Standard-Prompt. Hier eigene Leitplanken eintragen, die die KI bei der Story-Erstellung befolgen soll."
-            helperText="Überschreibt den Standard-Prompt. Muss mit 'Antworte NUR mit gültigem JSON' enden, damit die Ausgabe funktioniert."
-          />
-          <Button
-            size="small"
-            onClick={() => setCustomSystemPrompt(getDefaultSystemPrompt('de'))}
-            sx={{ mt: 1 }}
-          >
-            Standard (DE) laden
-          </Button>
-          <Button
-            size="small"
-            onClick={() => setCustomSystemPrompt(getDefaultSystemPrompt('en'))}
-            sx={{ mt: 1, ml: 1 }}
-          >
-            Standard (EN) laden
-          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            User Story: DE-Prompt für den deutschen Teil, EN-Prompt für den englischen. Bug Report: je nach gewähltem Typ. Leer = Standard-Prompt. Muss mit „Antworte NUR mit gültigem JSON“ enden.
+          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+              Deutsch
+            </Typography>
+            <TextField
+              value={customSystemPromptDE || getDefaultSystemPrompt('de')}
+              onChange={(e) => setCustomSystemPromptDE(e.target.value)}
+              multiline
+              minRows={4}
+              fullWidth
+              size="small"
+              sx={{ mb: 1 }}
+            />
+            <Button size="small" variant="outlined" onClick={() => setResetPromptLang('de')}>
+              Auf Standard zurücksetzen
+            </Button>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+              Englisch
+            </Typography>
+            <TextField
+              value={customSystemPromptEN || getDefaultSystemPrompt('en')}
+              onChange={(e) => setCustomSystemPromptEN(e.target.value)}
+              multiline
+              minRows={4}
+              fullWidth
+              size="small"
+              sx={{ mb: 1 }}
+            />
+            <Button size="small" variant="outlined" onClick={() => setResetPromptLang('en')}>
+              Auf Standard zurücksetzen
+            </Button>
+          </Box>
+
+        <Dialog open={!!resetPromptLang} onClose={() => setResetPromptLang(null)}>
+          <DialogTitle>Auf Standard zurücksetzen?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Der {resetPromptLang === 'de' ? 'deutsche' : 'englische'} System-Prompt wird auf den Standard zurückgesetzt. Nicht gespeicherte Änderungen gehen verloren.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setResetPromptLang(null)}>Abbrechen</Button>
+            <Button
+              onClick={() => {
+                if (resetPromptLang === 'de') setCustomSystemPromptDE('');
+                else if (resetPromptLang === 'en') setCustomSystemPromptEN('');
+                setResetPromptLang(null);
+              }}
+              variant="contained"
+            >
+              Zurücksetzen
+            </Button>
+          </DialogActions>
+        </Dialog>
         </Box>
 
         <Button variant="contained" onClick={handleSave}>
