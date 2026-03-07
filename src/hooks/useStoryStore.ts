@@ -15,6 +15,7 @@ export interface UseStoryStoreReturn {
   updateUserStoryNestedField: (lang: 'de' | 'en', field: string, subField: string, value: string[]) => void;
   updateUserStoryCopyBook: (copyBook: CopyBookEntry[]) => void;
   updateUserStoryImages: (images: string[]) => void;
+  updateUserStoryLinks: (links: string[]) => void;
   updateBugReportImages: (images: string[]) => void;
   loadItem: (id: string) => void;
   deleteItem: (id: string) => void;
@@ -143,6 +144,17 @@ export function useStoryStore(): UseStoryStoreReturn {
     );
   }, [currentItem?.id]);
 
+  const updateUserStoryLinks = useCallback((links: string[]) => {
+    const id = currentItem?.id ?? '';
+    setCurrentItem((prev) => {
+      if (!prev || prev.type !== 'user-story') return prev;
+      return { ...prev, links };
+    });
+    setItems((prev) =>
+      prev.map((i) => (i.id === id && i.type === 'user-story' ? { ...i, links } : i))
+    );
+  }, [currentItem?.id]);
+
   const updateBugReportImages = useCallback((images: string[]) => {
     const id = currentItem?.id ?? '';
     setCurrentItem((prev) => {
@@ -177,6 +189,7 @@ export function useStoryStore(): UseStoryStoreReturn {
     updateUserStoryNestedField,
     updateUserStoryCopyBook,
     updateUserStoryImages,
+    updateUserStoryLinks,
     updateBugReportImages,
     loadItem,
     deleteItem,

@@ -3,6 +3,7 @@ import { Box, Paper, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTi
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import TranslateIcon from '@mui/icons-material/Translate';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { EditableField } from './EditableField';
@@ -20,6 +21,9 @@ interface StoryEditorProps {
   ai: UseAIGeneratorReturn;
   settings: Settings | null;
   onDelete?: (id: string) => void;
+  /** Kontrollierter Tab: 0 = Deutsch, 1 = English. Wenn nicht gesetzt, wird interner State verwendet. */
+  activeLangTab?: number;
+  onActiveLangTabChange?: (tab: number) => void;
 }
 
 function StoryLangEditor({
@@ -46,7 +50,9 @@ function StoryLangEditor({
     if (!regenSection || !settings?.apiKey) return;
     const result = await ai.regenerateSection(lang, regenSection, regenPrompt, settings);
     if (result && item.type === 'user-story') {
-      if (Array.isArray(result)) {
+      if (regenSection === 'links' && Array.isArray(result)) {
+        store.updateUserStoryLinks(result);
+      } else if (Array.isArray(result)) {
         if (regenSection.includes('.')) {
           const [field, subField] = regenSection.split('.');
           store.updateUserStoryNestedField(lang, field, subField, result);
@@ -198,32 +204,6 @@ function StoryLangEditor({
         )}
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-            📚 Anhänge
-            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'anhaenge', [...(c.anhaenge ?? []), ''])}>
-              Hinzufügen
-            </Button>
-          </Typography>
-          {(c.anhaenge ?? []).map((v, i) => (
-            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
-                <IconButton size="small" onClick={() => { const arr = [...(c.anhaenge ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('de', 'anhaenge', arr); } }} disabled={i === 0} title="Nach oben">
-                  <ArrowUpwardIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" onClick={() => { const arr = [...(c.anhaenge ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('de', 'anhaenge', arr); } }} disabled={i === (c.anhaenge?.length ?? 0) - 1} title="Nach unten">
-                  <ArrowDownwardIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <EditableField value={v} onChange={(val) => { const arr = [...(c.anhaenge ?? [])]; arr[i] = val; updateUserStoryField('de', 'anhaenge', arr); }} label={`${i + 1}`} multiline />
-              </Box>
-              <IconButton size="small" onClick={() => updateUserStoryField('de', 'anhaenge', (c.anhaenge ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          ))}
-        </Box>
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
             🚫 Out of Scope
             <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'outOfScope', [...(c.outOfScope ?? []), ''])}>
               Hinzufügen
@@ -248,13 +228,6 @@ function StoryLangEditor({
             </Box>
           ))}
         </Box>
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            🎫 Jira Ticket
-          </Typography>
-          <EditableField value={c.jiraTicket} onChange={(v) => updateUserStoryField('de', 'jiraTicket', v)} />
-        </Box>
-
         <Dialog open={!!regenSection} onClose={() => setRegenSection(null)} maxWidth="sm" fullWidth>
           <DialogTitle>Sektion mit KI anpassen</DialogTitle>
           <DialogContent>
@@ -410,32 +383,6 @@ function StoryLangEditor({
       )}
       <Box>
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-          📚 Resources
-          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'resources', [...(c.resources ?? []), ''])}>
-            Add
-          </Button>
-        </Typography>
-        {(c.resources ?? []).map((v, i) => (
-          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
-              <IconButton size="small" onClick={() => { const arr = [...(c.resources ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('en', 'resources', arr); } }} disabled={i === 0} title="Move up">
-                <ArrowUpwardIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" onClick={() => { const arr = [...(c.resources ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('en', 'resources', arr); } }} disabled={i === (c.resources?.length ?? 0) - 1} title="Move down">
-                <ArrowDownwardIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <EditableField value={v} onChange={(val) => { const arr = [...(c.resources ?? [])]; arr[i] = val; updateUserStoryField('en', 'resources', arr); }} label={`${i + 1}`} multiline />
-            </Box>
-            <IconButton size="small" onClick={() => updateUserStoryField('en', 'resources', (c.resources ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        ))}
-      </Box>
-      <Box>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           🚫 Out of Scope
           <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'outOfScope', [...(c.outOfScope ?? []), ''])}>
             Add
@@ -486,10 +433,24 @@ function StoryLangEditor({
   );
 }
 
-export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditorProps) {
-  const [tab, setTab] = useState(0);
+export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab, onActiveLangTabChange }: StoryEditorProps) {
+  const [internalTab, setInternalTab] = useState(0);
+  const tab = activeLangTab ?? internalTab;
+  const setTab = onActiveLangTabChange ?? setInternalTab;
   const [fullRegenOpen, setFullRegenOpen] = useState(false);
   const [fullRegenPrompt, setFullRegenPrompt] = useState('');
+  const [linksRegenOpen, setLinksRegenOpen] = useState(false);
+  const [linksRegenPrompt, setLinksRegenPrompt] = useState('');
+
+  const handleLinksRegen = async () => {
+    if (!settings?.apiKey || !linksRegenPrompt.trim()) return;
+    const result = await ai.regenerateSection('de', 'links', linksRegenPrompt, settings);
+    if (result && Array.isArray(result) && item?.type === 'user-story') {
+      store.updateUserStoryLinks(result);
+      setLinksRegenOpen(false);
+      setLinksRegenPrompt('');
+    }
+  };
 
   const handleFullRegen = async () => {
     if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
@@ -502,6 +463,15 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
     }
   };
 
+  const handleSyncDEToEN = async () => {
+    if (!item || !settings?.apiKey) return;
+    const updated = await ai.syncDEToEN(item, settings);
+    if (updated) {
+      store.setCurrentItem(updated);
+      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
+    }
+  };
+
   if (!item) return null;
 
   return (
@@ -509,7 +479,14 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
       <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="h5">User Story</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+            <TextField
+              value={item.title}
+              onChange={(e) => store.updateField('title', e.target.value)}
+              size="small"
+              placeholder="Titel"
+              sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
+            />
             <Button
               size="small"
               startIcon={<AutoAwesomeIcon />}
@@ -518,13 +495,6 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
             >
               Alles mit KI anpassen
             </Button>
-            <TextField
-              value={item.title}
-              onChange={(e) => store.updateField('title', e.target.value)}
-              size="small"
-              placeholder="Titel"
-              sx={{ maxWidth: 280, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
-            />
             {onDelete && (
               <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
                 <DeleteIcon />
@@ -556,13 +526,88 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
           </DialogActions>
         </Dialog>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-          <Tab label="Deutsch" />
-          <Tab label="English" />
-        </Tabs>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flex: 1, minWidth: 0 }}>
+            <Tab label="Deutsch" />
+            <Tab label="English" />
+          </Tabs>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={ai.isLoading ? undefined : <TranslateIcon />}
+            onClick={handleSyncDEToEN}
+            disabled={!settings?.apiKey || ai.isLoading}
+          >
+            {ai.isLoading ? 'Wird übertragen…' : 'DE → EN übertragen'}
+          </Button>
+        </Box>
 
         {tab === 0 && <StoryLangEditor lang="de" content={item.de} store={store} ai={ai} settings={settings} item={item} />}
         {tab === 1 && <StoryLangEditor lang="en" content={item.en} store={store} ai={ai} settings={settings} item={item} />}
+
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            🔗 Links / Ressourcen
+            <Button size="small" startIcon={<AddIcon />} onClick={() => store.updateUserStoryLinks([...(item.links ?? []), ''])}>
+              Hinzufügen
+            </Button>
+            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setLinksRegenOpen(true)} disabled={!settings?.apiKey}>
+              Mit KI anpassen
+            </Button>
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Gemeinsam für DE (Krankenkasse) und EN (Entwickler) – ein Eintrag für beide
+          </Typography>
+          {(item.links ?? []).map((v, i) => (
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...(item.links ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; store.updateUserStoryLinks(arr); } }} disabled={i === 0} title="Nach oben">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...(item.links ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; store.updateUserStoryLinks(arr); } }} disabled={i === (item.links?.length ?? 0) - 1} title="Nach unten">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField
+                  value={v}
+                  onChange={(val) => {
+                    const arr = [...(item.links ?? [])];
+                    arr[i] = val;
+                    store.updateUserStoryLinks(arr);
+                  }}
+                  label={`${i + 1}`}
+                  multiline
+                />
+              </Box>
+              <IconButton size="small" onClick={() => store.updateUserStoryLinks((item.links ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </Box>
+
+        <Dialog open={linksRegenOpen} onClose={() => setLinksRegenOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Links mit KI anpassen</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              label="Anweisung / Prompt"
+              fullWidth
+              multiline
+              minRows={3}
+              value={linksRegenPrompt}
+              onChange={(e) => setLinksRegenPrompt(e.target.value)}
+              placeholder="z.B.: Füge den Jira-Link PROJ-123 hinzu, entferne veraltete Design-Links."
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setLinksRegenOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleLinksRegen} variant="contained" disabled={!linksRegenPrompt.trim() || ai.isLoading}>
+              {ai.isLoading ? 'Wird angepasst...' : 'Anpassen'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Paper>
 
       <StoryCopyBookSection item={item} store={store} ai={ai} settings={settings} />

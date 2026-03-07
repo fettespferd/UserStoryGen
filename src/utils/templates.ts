@@ -17,9 +17,7 @@ const DE_CONTENT = {
       '4. Zurück zur Maske stellt Eingaben wieder her.',
     ],
   },
-  anhaenge: ['[Designs, APIs, Schemas]'],
   outOfScope: ['[Explizit Nicht-Bestandteil]'],
-  jiraTicket: '[Link oder Referenz]',
 };
 
 const EN_CONTENT = {
@@ -41,7 +39,6 @@ const EN_CONTENT = {
       '4. Back to form restores inputs.',
     ],
   },
-  resources: ['[Designs, APIs, schemas]'],
   outOfScope: ['[Explicitly not included]'],
 };
 
@@ -52,17 +49,18 @@ export function createUserStory(id: string, title = 'User Story'): UserStory {
     title,
     de: { ...DE_CONTENT },
     en: { ...EN_CONTENT },
+    links: [],
     copyBook: [],
     images: [],
   };
 }
 
 export function createUserStoryDE(id: string): UserStoryDE {
-  return { id, type: 'user-story-de', ...DE_CONTENT };
+  return { id, type: 'user-story-de', ...DE_CONTENT, anhaenge: ['[Designs, APIs, Schemas]'], jiraTicket: '[Link oder Referenz]' };
 }
 
 export function createUserStoryEN(id: string): UserStoryEN {
-  return { id, type: 'user-story-en', ...EN_CONTENT };
+  return { id, type: 'user-story-en', ...EN_CONTENT, resources: ['[Designs, APIs, schemas]'] };
 }
 
 export function createBugReport(id: string, lang: 'de' | 'en'): BugReport {

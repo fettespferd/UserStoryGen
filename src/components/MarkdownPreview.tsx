@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import { Box, Paper, Typography, Button } from '@mui/material';
+import { useCallback, useState } from 'react';
+import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import type { StoryItem, Settings } from '../types/story';
+import type { StoryItem, Settings, MarkdownLinkTenant } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
 
 interface MarkdownPreviewProps {
@@ -11,19 +11,48 @@ interface MarkdownPreviewProps {
   onCopy?: () => void;
 }
 
+function getAccessibilityLink(
+  tenant: MarkdownLinkTenant,
+  settings: Settings | null | undefined,
+  lang: 'de' | 'en'
+): string | null {
+  if (tenant === 'none' || !settings?.tenantLinks) return null;
+  const url =
+    tenant === 'aokn'
+      ? settings.tenantLinks.aokn?.accessibilityPage
+      : tenant === 'vitagroup'
+        ? settings.tenantLinks.vitagroup?.accessibilityPage
+        : null;
+  if (!url?.trim()) return null;
+  const label = lang === 'de' ? 'Barrierefreiheits-Seite' : 'Accessibility Page';
+  return `[${label}](${url.trim()})`;
+}
+
 export function MarkdownPreview({ item, activeLang, settings, onCopy }: MarkdownPreviewProps) {
   const headingLevel = settings?.markdownHeadingLevel ?? 'h3';
+  const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(settings?.markdownLinkTenant ?? 'none');
+  const lang = activeLang ?? 'de';
 
   const handleCopy = useCallback(() => {
     if (!item) return;
-    const md = toMarkdown(item, activeLang, { headingLevel });
+    let md = toMarkdown(item, activeLang, { headingLevel });
+    const link = getAccessibilityLink(linkTenant, settings, lang);
+    if (link) {
+      const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
+      md += `\n\n${h} **♿ Barrierefreiheit**\n\n${link}`;
+    }
     navigator.clipboard.writeText(md);
     onCopy?.();
-  }, [item, activeLang, headingLevel, onCopy]);
+  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy]);
 
   if (!item) return null;
 
-  const md = toMarkdown(item, activeLang, { headingLevel });
+  let md = toMarkdown(item, activeLang, { headingLevel });
+  const link = getAccessibilityLink(linkTenant, settings, lang);
+  if (link) {
+    const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
+    md += `\n\n${h} **♿ Barrierefreiheit**\n\n${link}`;
+  }
   const title = item.title;
 
   const handleCopyTitle = useCallback(() => {
@@ -56,16 +85,35 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
           </Box>
         </Box>
       )}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h6">Markdown (Jira/Confluence)</Typography>
-        <Button
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Link hinzufügen</InputLabel>
+            <Select
+              value={linkTenant}
+              label="Link hinzufügen"
+              onChange={(e) => setLinkTenant(e.target.value as MarkdownLinkTenant)}
+            >
+              <MenuItem value="none">Kein Link</MenuItem>
+              <MenuItem value="aokn">Accessibility Page (AOKN)</MenuItem>
+              <MenuItem value="vitagroup">Accessibility Page (Vitagroup)</MenuItem>
+            </Select>
+          </FormControl>
+          {linkTenant !== 'none' && !link && (
+            <Typography variant="caption" color="warning.main">
+              URL in Einstellungen fehlt
+            </Typography>
+          )}
+          <Button
           variant="contained"
           size="small"
           startIcon={<ContentCopyIcon />}
-          onClick={handleCopy}
-        >
-          Copy Markdown
-        </Button>
+            onClick={handleCopy}
+          >
+            Copy Markdown
+          </Button>
+        </Box>
       </Box>
       <Box
         component="pre"

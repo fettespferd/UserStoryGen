@@ -31,48 +31,77 @@ export function toMarkdown(
   if (item.type === 'bug-report') return bugReportToMarkdown(item, h);
   if (item.type === 'user-story') {
     const lang = activeLang ?? 'de';
-    return lang === 'de' ? userStoryDEToMarkdown(item.de, h) : userStoryENToMarkdown(item.en, h);
+    return lang === 'de' ? userStoryDEToMarkdown(item.de, h, item.links) : userStoryENToMarkdown(item.en, h, item.links);
   }
-  if (item.type === 'user-story-de') return userStoryDEToMarkdown(item, h);
-  return userStoryENToMarkdown(item, h);
+  if (item.type === 'user-story-de') {
+    const legacyLinks = [...(item.anhaenge ?? []), ...(item.jiraTicket?.trim() ? [item.jiraTicket] : [])];
+    return userStoryDEToMarkdown(item, h, legacyLinks);
+  }
+  if (item.type === 'user-story-en') return userStoryENToMarkdown(item, h, item.resources ?? []);
+  return '';
 }
 
+const BUG_LABELS_DE = {
+  title: 'Titel',
+  description: 'Beschreibung',
+  expectedResult: 'Erwartetes Ergebnis (SOLL)',
+  actualResult: 'Tatsächliches Ergebnis (IST)',
+  stepsToReproduce: 'Schritte zur Reproduktion',
+  technicalDetails: 'Technische Details',
+  severityPriority: 'Schweregrad / Priorität',
+  resources: 'Ressourcen',
+  outOfScope: 'Außerhalb des Scope',
+};
+
+const BUG_LABELS_EN = {
+  title: 'Title',
+  description: 'Description',
+  expectedResult: 'Expected Result',
+  actualResult: 'Actual Result',
+  stepsToReproduce: 'Steps to Reproduce',
+  technicalDetails: 'Technical Details',
+  severityPriority: 'Severity / Priority',
+  resources: 'Resources',
+  outOfScope: 'Out of Scope',
+};
+
 function bugReportToMarkdown(bug: BugReport, h: MarkdownHeadingLevel): string {
+  const labels = bug.lang === 'de' ? BUG_LABELS_DE : BUG_LABELS_EN;
   const lines: string[] = [];
 
-  lines.push(heading(h, '🏷️ Title'));
+  lines.push(heading(h, `🏷️ ${labels.title}`));
   lines.push('');
   lines.push(bug.title);
   lines.push('');
-  lines.push(heading(h, '📝 Description'));
+  lines.push(heading(h, `📝 ${labels.description}`));
   lines.push('');
   lines.push(bug.description);
   lines.push('');
-  lines.push(heading(h, '✅ Expected Result (SOLL)'));
+  lines.push(heading(h, `✅ ${labels.expectedResult}`));
   lines.push('');
   lines.push(bug.expectedResult);
   lines.push('');
-  lines.push(heading(h, '❌ Actual Result (IST)'));
+  lines.push(heading(h, `❌ ${labels.actualResult}`));
   lines.push('');
   lines.push(bug.actualResult);
   lines.push('');
-  lines.push(heading(h, '🔁 Steps to Reproduce'));
+  lines.push(heading(h, `🔁 ${labels.stepsToReproduce}`));
   lines.push('');
   bug.stepsToReproduce.forEach((step) => lines.push(step));
   lines.push('');
-  lines.push(heading(h, '🛠️ Technical Details'));
+  lines.push(heading(h, `🛠️ ${labels.technicalDetails}`));
   lines.push('');
   lines.push(bug.technicalDetails);
   lines.push('');
-  lines.push(heading(h, '📊 Severity / Priority'));
+  lines.push(heading(h, `📊 ${labels.severityPriority}`));
   lines.push('');
   lines.push(bug.severityPriority);
   lines.push('');
-  lines.push(heading(h, '📚 Resources'));
+  lines.push(heading(h, `📚 ${labels.resources}`));
   lines.push('');
   lines.push(bug.resources);
   lines.push('');
-  lines.push(heading(h, '🚫 Out of Scope'));
+  lines.push(heading(h, `🚫 ${labels.outOfScope}`));
   lines.push('');
   lines.push(bug.outOfScope);
 
@@ -81,7 +110,8 @@ function bugReportToMarkdown(bug: BugReport, h: MarkdownHeadingLevel): string {
 
 function userStoryDEToMarkdown(
   story: UserStoryDE | import('../types/story').UserStoryDEContent,
-  h: MarkdownHeadingLevel
+  h: MarkdownHeadingLevel,
+  links?: string[]
 ): string {
   const lines: string[] = [];
 
@@ -109,24 +139,21 @@ function userStoryDEToMarkdown(
     story.nutzerflows.fehlerszenario.forEach((step) => lines.push(step));
   }
   lines.push('');
-  lines.push(heading(h, '📚 Anhänge'));
+  lines.push(heading(h, '📚 Anhänge / Links'));
   lines.push('');
-  (story.anhaenge ?? []).forEach((v) => lines.push(`- ${v}`));
+  (links ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
   (story.outOfScope ?? []).forEach((v) => lines.push(`- ${v}`));
-  lines.push('');
-  lines.push(heading(h, '🎫 Jira Ticket'));
-  lines.push('');
-  lines.push(story.jiraTicket);
 
   return lines.join('\n');
 }
 
 function userStoryENToMarkdown(
   story: UserStoryEN | import('../types/story').UserStoryENContent,
-  h: MarkdownHeadingLevel
+  h: MarkdownHeadingLevel,
+  links?: string[]
 ): string {
   const lines: string[] = [];
 
@@ -166,9 +193,9 @@ function userStoryENToMarkdown(
     story.userFlows.errorScenario.forEach((step) => lines.push(step));
   }
   lines.push('');
-  lines.push(heading(h, '📚 Resources'));
+  lines.push(heading(h, '📚 Resources / Links'));
   lines.push('');
-  (story.resources ?? []).forEach((v) => lines.push(`- ${v}`));
+  (links ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');

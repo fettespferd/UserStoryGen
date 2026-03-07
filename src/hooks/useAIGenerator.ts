@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, Settings } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, Settings, ProjectType } from '../types/story';
 import { generateId } from '../utils/templates';
 
 const SYSTEM_PROMPT_DE = `Du bist ein professioneller Product Owner. Erstelle User Stories und Bug Reports.
@@ -39,6 +39,22 @@ function getSystemPrompt(lang: 'de' | 'en', customPrompt?: string): string {
   return getDefaultSystemPrompt(lang);
 }
 
+function mergeToLinks(de?: { anhaenge?: string[]; jiraTicket?: string }, en?: { resources?: string[] }): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (v: string) => {
+    const s = v?.trim();
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  };
+  if (de?.anhaenge) de.anhaenge.forEach(add);
+  if (de?.jiraTicket) add(de.jiraTicket);
+  if (en?.resources) en.resources.forEach(add);
+  return out;
+}
+
 const USER_STORY_DE_SCHEMA = `{
   "type": "user-story-de",
   "title": "Kurzer, prägnanter Story-Titel (max. 60 Zeichen, z.B. 'Lebensphase in Einstellungen beenden')",
@@ -46,7 +62,7 @@ const USER_STORY_DE_SCHEMA = `{
   "akzeptanzkriterien": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "voraussetzungen": "...",
   "nutzerflows": { "happyFlow": ["1. User …", "2. System …"], "fehlerszenario": ["1. User …", "2. System erkennt ..."] },
-  "anhaenge": "...",
+  "anhaenge": ["[Designs, APIs, Jira-Link]"],
   "outOfScope": "...",
   "jiraTicket": "..."
 }`;
@@ -60,7 +76,7 @@ const USER_STORY_EN_SCHEMA = `{
   "roles": "...",
   "prerequisites": "...",
   "userFlows": { "happyPath": ["1. User …", "2. System …"], "errorScenario": ["1. User …", "2. System detects ..."] },
-  "resources": "...",
+  "resources": ["[Designs, APIs, Jira link]"],
   "outOfScope": "..."
 }`;
 
@@ -83,7 +99,8 @@ export interface UseAIGeneratorReturn {
     prompt: string,
     type: 'user-story' | 'bug-de' | 'bug-en',
     settings: Settings | null,
-    images?: string[]
+    images?: string[],
+    project?: ProjectType
   ) => Promise<StoryItem | null>;
   regenerateSection: (
     lang: 'de' | 'en',
@@ -96,6 +113,12 @@ export interface UseAIGeneratorReturn {
     prompt: string,
     settings: Settings | null
   ) => Promise<UserStory | null>;
+  syncDEToEN: (item: UserStory, settings: Settings | null) => Promise<UserStory | null>;
+  regenerateFullBugReport: (
+    item: BugReport,
+    prompt: string,
+    settings: Settings | null
+  ) => Promise<BugReport | null>;
   extractCopyBook: (
     images: string[],
     settings: Settings | null
@@ -206,18 +229,21 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       prompt: string,
       type: 'user-story' | 'bug-de' | 'bug-en',
       settings: Settings | null,
-      images?: string[]
+      images?: string[],
+      project?: ProjectType
     ): Promise<StoryItem | null> => {
       if (!settings?.apiKey) {
         setError('API-Key fehlt. Bitte in den Einstellungen hinterlegen.');
         return null;
       }
+      const projectPrefix = project ? `Kontext: Dies ist für Projekt ${project === 'aokn' ? 'AOKN' : 'HealthMatch'}.\n\n` : '';
+      const fullPrompt = projectPrefix + prompt;
       setIsLoading(true);
       setError(null);
       try {
         if (type === 'user-story') {
-          const deResult = await generateSingle(prompt, 'user-story-de', settings, images) as UserStoryDE | null;
-          const enResult = await generateSingle(prompt, 'user-story-en', settings, images) as UserStoryEN | null;
+          const deResult = await generateSingle(fullPrompt, 'user-story-de', settings, images) as UserStoryDE | null;
+          const enResult = await generateSingle(fullPrompt, 'user-story-en', settings, images) as UserStoryEN | null;
           if (!deResult || !enResult) return null;
           const id = generateId();
           const title =
@@ -225,20 +251,21 @@ export function useAIGenerator(): UseAIGeneratorReturn {
             (enResult as { title?: string }).title?.trim() ||
             deResult.beschreibung?.slice(0, 60) ||
             'User Story';
+          const links = mergeToLinks(deResult, enResult);
           const userStory: UserStory = {
             id,
             type: 'user-story',
             title,
+            project,
             copyBook: [],
             images: images ?? [],
+            links,
             de: {
               beschreibung: deResult.beschreibung,
               akzeptanzkriterien: deResult.akzeptanzkriterien,
               voraussetzungen: deResult.voraussetzungen,
               nutzerflows: deResult.nutzerflows,
-              anhaenge: deResult.anhaenge,
               outOfScope: deResult.outOfScope,
-              jiraTicket: deResult.jiraTicket,
             },
             en: {
               description: enResult.description,
@@ -247,17 +274,17 @@ export function useAIGenerator(): UseAIGeneratorReturn {
               roles: enResult.roles,
               prerequisites: enResult.prerequisites,
               userFlows: enResult.userFlows,
-              resources: enResult.resources,
               outOfScope: enResult.outOfScope,
             },
           };
           return userStory;
         }
-        const bugResult = (await generateSingle(prompt, type, settings, images)) as BugReport | null;
-        if (bugResult && images?.length) {
-          return { ...bugResult, images } as StoryItem;
+        const bugResult = (await generateSingle(fullPrompt, type, settings, images)) as BugReport | null;
+        if (bugResult) {
+          const withProject = { ...bugResult, project };
+          return (images?.length ? { ...withProject, images } : withProject) as StoryItem;
         }
-        return bugResult as StoryItem | null;
+        return null;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -273,15 +300,15 @@ export function useAIGenerator(): UseAIGeneratorReturn {
     const e = item.en;
     return `Aktueller Titel: ${item.title}
 
+Links (gemeinsam DE+EN): ${(item.links ?? []).join(' | ')}
+
 Aktuelle Story (DE):
 Beschreibung: ${d.beschreibung}
 Akzeptanzkriterien: ${(d.akzeptanzkriterien ?? []).join(' | ')}
 Voraussetzungen: ${(d.voraussetzungen ?? []).join(' | ')}
 Happy Flow: ${(d.nutzerflows.happyFlow ?? []).join(' | ')}
 Fehlerszenario: ${(d.nutzerflows.fehlerszenario ?? []).join(' | ')}
-Anhänge: ${(d.anhaenge ?? []).join(' | ')}
 Out of Scope: ${(d.outOfScope ?? []).join(' | ')}
-Jira: ${d.jiraTicket}
 
 Aktuelle Story (EN):
 Description: ${e.description}
@@ -289,7 +316,6 @@ Acceptance Criteria: ${(e.acceptanceCriteria ?? []).join(' | ')}
 Prerequisites: ${(e.prerequisites ?? []).join(' | ')}
 Happy Path: ${(e.userFlows.happyPath ?? []).join(' | ')}
 Error Scenario: ${(e.userFlows.errorScenario ?? []).join(' | ')}
-Resources: ${(e.resources ?? []).join(' | ')}
 Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
   };
 
@@ -309,17 +335,17 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
           (deResult as { title?: string }).title?.trim() ||
           (enResult as { title?: string }).title?.trim() ||
           item.title;
+        const links = mergeToLinks(deResult, enResult);
         const updated: UserStory = {
           ...item,
           title: newTitle,
+          links,
           de: {
             beschreibung: deResult.beschreibung,
             akzeptanzkriterien: deResult.akzeptanzkriterien,
             voraussetzungen: deResult.voraussetzungen,
             nutzerflows: deResult.nutzerflows,
-            anhaenge: deResult.anhaenge,
             outOfScope: deResult.outOfScope,
-            jiraTicket: deResult.jiraTicket,
           },
           en: {
             description: enResult.description,
@@ -328,11 +354,103 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
             roles: enResult.roles,
             prerequisites: enResult.prerequisites,
             userFlows: enResult.userFlows,
-            resources: enResult.resources,
             outOfScope: enResult.outOfScope,
           },
         };
         return updated;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [generateSingle]
+  );
+
+  const syncDEToEN = useCallback(
+    async (item: UserStory, settings: Settings | null): Promise<UserStory | null> => {
+      if (!settings?.apiKey) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const d = item.de;
+        const deContent = `Übersetze diese deutsche User Story ins Englische. Behalte die gleiche Struktur und Qualität.
+
+Deutsche Story:
+Titel: ${item.title}
+Beschreibung: ${d.beschreibung}
+Akzeptanzkriterien: ${(d.akzeptanzkriterien ?? []).map((ac, i) => `AC${i + 1}: ${ac}`).join('\n')}
+Voraussetzungen: ${(d.voraussetzungen ?? []).join('\n')}
+Happy Flow: ${(d.nutzerflows.happyFlow ?? []).join('\n')}
+Fehlerszenario: ${(d.nutzerflows.fehlerszenario ?? []).join('\n')}
+Links (nicht übersetzen, bleiben gleich): ${(item.links ?? []).join('\n')}
+Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
+        const opts = { promptPrefix: 'Übersetze die folgende deutsche User Story ins Englische.' };
+        const enResult = (await generateSingle(deContent, 'user-story-en', settings, undefined, opts)) as UserStoryEN | null;
+        if (!enResult) return null;
+        const newTitle = (enResult as { title?: string }).title?.trim() || item.title;
+        return {
+          ...item,
+          title: newTitle,
+          en: {
+            description: enResult.description,
+            acceptanceCriteria: enResult.acceptanceCriteria,
+            todos: enResult.todos,
+            roles: enResult.roles,
+            prerequisites: enResult.prerequisites,
+            userFlows: enResult.userFlows,
+            outOfScope: enResult.outOfScope,
+          },
+        };
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [generateSingle]
+  );
+
+  const buildBugContext = (item: BugReport): string => {
+    const isDe = item.lang === 'de';
+    return `Aktueller Bug Report (${isDe ? 'Deutsch' : 'English'}):
+${isDe ? 'Titel' : 'Title'}: ${item.title}
+${isDe ? 'Beschreibung' : 'Description'}: ${item.description}
+${isDe ? 'Erwartetes Ergebnis (SOLL)' : 'Expected Result'}: ${item.expectedResult}
+${isDe ? 'Tatsächliches Ergebnis (IST)' : 'Actual Result'}: ${item.actualResult}
+${isDe ? 'Schritte zur Reproduktion' : 'Steps to Reproduce'}: ${(item.stepsToReproduce ?? []).join(' | ')}
+${isDe ? 'Technische Details' : 'Technical Details'}: ${item.technicalDetails}
+${isDe ? 'Schweregrad/Priorität' : 'Severity/Priority'}: ${item.severityPriority}
+${isDe ? 'Ressourcen' : 'Resources'}: ${item.resources}
+${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
+  };
+
+  const regenerateFullBugReport = useCallback(
+    async (item: BugReport, prompt: string, settings: Settings | null): Promise<BugReport | null> => {
+      if (!settings?.apiKey || !prompt.trim()) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const context = buildBugContext(item);
+        const updatePrompt = `Nimm folgende Anpassungen vor:\n\n${prompt}\n\n${context}`;
+        const opts = { promptPrefix: 'Aktualisiere diesen bestehenden Bug Report.' };
+        const type = item.lang === 'de' ? 'bug-de' : 'bug-en';
+        const result = (await generateSingle(updatePrompt, type, settings, undefined, opts)) as BugReport | null;
+        if (!result) return null;
+        return {
+          ...item,
+          title: result.title,
+          description: result.description,
+          expectedResult: result.expectedResult,
+          actualResult: result.actualResult,
+          stepsToReproduce: result.stepsToReproduce,
+          technicalDetails: result.technicalDetails,
+          severityPriority: result.severityPriority,
+          resources: result.resources,
+          outOfScope: result.outOfScope,
+        };
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -350,7 +468,8 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
       setError(null);
       try {
         const sysPrompt = getSystemPrompt(lang, settings.customSystemPrompt);
-        const sectionPrompt = `Aktualisiere nur die Sektion "${section}" basierend auf: ${prompt}\n\nAntworte NUR mit dem neuen Inhalt als JSON: für Einzeltext {"value":"..."}, für Array {"value":["...","..."]}.`;
+        const sectionLabel = section === 'links' ? 'Links/Ressourcen (Jira, Designs, APIs)' : section;
+        const sectionPrompt = `Aktualisiere nur die Sektion "${sectionLabel}" basierend auf: ${prompt}\n\nAntworte NUR mit dem neuen Inhalt als JSON: für Einzeltext {"value":"..."}, für Array {"value":["...","..."]}.`;
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.apiKey}` },
@@ -476,7 +595,7 @@ Keine anderen Texte.`;
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, extractCopyBook, isLoading, error };
+  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, isLoading, error };
 }
 
 function parseAIResponse(

@@ -49,6 +49,12 @@ export function Settings({
   const [markdownHeadingLevel, setMarkdownHeadingLevel] = useState<MarkdownHeadingLevel>(
     settings?.markdownHeadingLevel ?? 'h3'
   );
+  const [aoknAccessibilityUrl, setAoknAccessibilityUrl] = useState(
+    settings?.tenantLinks?.aokn?.accessibilityPage ?? ''
+  );
+  const [vitagroupAccessibilityUrl, setVitagroupAccessibilityUrl] = useState(
+    settings?.tenantLinks?.vitagroup?.accessibilityPage ?? ''
+  );
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
 
@@ -60,6 +66,8 @@ export function Settings({
       setDefaultTicketType(settings.defaultTicketType);
       setCustomSystemPrompt(settings.customSystemPrompt ?? '');
       setMarkdownHeadingLevel(settings.markdownHeadingLevel ?? 'h3');
+      setAoknAccessibilityUrl(settings.tenantLinks?.aokn?.accessibilityPage ?? '');
+      setVitagroupAccessibilityUrl(settings.tenantLinks?.vitagroup?.accessibilityPage ?? '');
     }
   }, [settings]);
 
@@ -97,6 +105,10 @@ export function Settings({
       defaultTicketType,
       customSystemPrompt: customSystemPrompt.trim() || undefined,
       markdownHeadingLevel,
+      tenantLinks: {
+        aokn: aoknAccessibilityUrl.trim() ? { accessibilityPage: aoknAccessibilityUrl.trim() } : undefined,
+        vitagroup: vitagroupAccessibilityUrl.trim() ? { accessibilityPage: vitagroupAccessibilityUrl.trim() } : undefined,
+      },
     };
     onSettingsChange(next);
     if (storage.hasAccess) {
@@ -203,6 +215,32 @@ export function Settings({
             <MenuItem value="h3">H3 (###) – Standard für Jira/Confluence</MenuItem>
           </Select>
         </FormControl>
+
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Links für Markdown (Tenant-spezifisch)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Barrierefreiheits-Seite pro Tenant. Wird im Markdown als Link angehängt, wenn der entsprechende Tenant ausgewählt ist.
+          </Typography>
+          <TextField
+            label="AOKN – Barrierefreiheits-Seite (URL)"
+            value={aoknAccessibilityUrl}
+            onChange={(e) => setAoknAccessibilityUrl(e.target.value)}
+            fullWidth
+            size="small"
+            placeholder="https://..."
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Vitagroup – Barrierefreiheits-Seite (URL)"
+            value={vitagroupAccessibilityUrl}
+            onChange={(e) => setVitagroupAccessibilityUrl(e.target.value)}
+            fullWidth
+            size="small"
+            placeholder="https://..."
+          />
+        </Box>
 
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>

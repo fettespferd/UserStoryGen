@@ -14,6 +14,7 @@ import {
   TextField,
   Alert,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import AddIcon from '@mui/icons-material/Add';
@@ -169,41 +170,54 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
             style={{ display: 'none' }}
             onChange={handleExtractFromDesign}
           />
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={
-              ai.isLoading ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <ImageIcon />
-              )
-            }
-            onClick={() => extractInputRef.current?.click()}
-            disabled={!settings?.apiKey || ai.isLoading}
-          >
-            Aus Design extrahieren
-          </Button>
+          <Tooltip title="Neue Bilder auswählen und UI-Texte extrahieren">
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={
+                  ai.isLoading ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <ImageIcon />
+                  )
+                }
+                onClick={() => extractInputRef.current?.click()}
+                disabled={!settings?.apiKey || ai.isLoading}
+              >
+                Aus Design extrahieren
+              </Button>
+            </span>
+          </Tooltip>
           {images.length > 0 && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={
-                ai.isLoading ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <ImageIcon />
-                )
-              }
-              onClick={handleExtractFromExistingImages}
-              disabled={!settings?.apiKey || ai.isLoading}
-            >
-              Mit Story-Bildern extrahieren
-            </Button>
+            <Tooltip title="Text aus den bereits hochgeladenen Bildern extrahieren – kein erneuter Upload nötig">
+              <span>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="secondary"
+                  startIcon={
+                    ai.isLoading ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <ImageIcon />
+                    )
+                  }
+                  onClick={handleExtractFromExistingImages}
+                  disabled={!settings?.apiKey || ai.isLoading}
+                >
+                  Aus hochgeladenen Bildern extrahieren
+                </Button>
+              </span>
+            </Tooltip>
           )}
         </Box>
         {images.length > 0 && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {images.length} Bild(er) vorhanden – Text extrahieren ohne erneuten Upload möglich.
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
             {images.map((dataUrl, i) => (
               <Box
                 key={i}
@@ -238,7 +252,8 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                 </IconButton>
               </Box>
             ))}
-          </Box>
+            </Box>
+          </>
         )}
       </Box>
 
@@ -326,7 +341,12 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
 
       {copyBook.length === 0 && images.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
-          Keine Einträge. Bilder hinzufügen und &quot;Aus Design extrahieren&quot; oder Zeile manuell hinzufügen.
+          Keine Einträge. Bilder hinzufügen und extrahieren, oder Zeile manuell hinzufügen.
+        </Typography>
+      )}
+      {copyBook.length === 0 && images.length > 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+          Klicke auf &quot;Aus hochgeladenen Bildern extrahieren&quot;, um UI-Texte aus den vorhandenen Bildern zu extrahieren.
         </Typography>
       )}
     </Paper>

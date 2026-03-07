@@ -1,15 +1,18 @@
-import { useRef } from 'react';
-import { Box, Paper, Typography, IconButton, Button } from '@mui/material';
+import { useRef, useState } from 'react';
+import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { EditableField } from './EditableField';
 import { MarkdownPreview } from './MarkdownPreview';
 import type { BugReport, Settings } from '../types/story';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
+import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 
 interface BugEditorProps {
   item: BugReport | null;
   store: UseStoryStoreReturn;
+  ai: UseAIGeneratorReturn;
   settings?: Settings | null;
   onDelete?: (id: string) => void;
 }
@@ -23,11 +26,53 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
+export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProps) {
   const { updateField, updateArrayField, updateBugReportImages } = store;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fullRegenOpen, setFullRegenOpen] = useState(false);
+  const [fullRegenPrompt, setFullRegenPrompt] = useState('');
+
+  const handleFullRegen = async () => {
+    if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
+    const updated = await ai.regenerateFullBugReport(item, fullRegenPrompt.trim(), settings);
+    if (updated) {
+      store.setCurrentItem(updated);
+      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
+      setFullRegenOpen(false);
+      setFullRegenPrompt('');
+    }
+  };
 
   if (!item) return null;
+
+  const isDe = item.lang === 'de';
+  const labels = isDe
+    ? {
+        description: 'Beschreibung',
+        expectedResult: 'Erwartetes Ergebnis (SOLL)',
+        actualResult: 'Tatsächliches Ergebnis (IST)',
+        stepsToReproduce: 'Schritte zur Reproduktion',
+        technicalDetails: 'Technische Details',
+        severityPriority: 'Schweregrad / Priorität',
+        resources: 'Ressourcen',
+        outOfScope: 'Außerhalb des Scope',
+        step: 'Schritt',
+        screenshots: 'Screenshots / Bilder',
+        addImages: 'Bilder hinzufügen',
+      }
+    : {
+        description: 'Description',
+        expectedResult: 'Expected Result',
+        actualResult: 'Actual Result',
+        stepsToReproduce: 'Steps to Reproduce',
+        technicalDetails: 'Technical Details',
+        severityPriority: 'Severity / Priority',
+        resources: 'Resources',
+        outOfScope: 'Out of Scope',
+        step: 'Step',
+        screenshots: 'Screenshots / Images',
+        addImages: 'Add images',
+      };
 
   const images = item.images ?? [];
 
@@ -49,29 +94,59 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="h5">Bug Report ({item.lang === 'de' ? 'Deutsch' : 'English'})</Typography>
-          {onDelete && (
-            <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
-              <DeleteIcon />
-            </IconButton>
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+            <TextField
+              value={item.title}
+              onChange={(e) => updateField('title', e.target.value)}
+              size="small"
+              placeholder="Titel"
+              sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
+            />
+            <Button
+              size="small"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => setFullRegenOpen(true)}
+              disabled={!settings?.apiKey}
+            >
+              Alles mit KI anpassen
+            </Button>
+            {onDelete && (
+              <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
+                <DeleteIcon />
+              </IconButton>
+            )}
+          </Box>
         </Box>
+
+        <Dialog open={fullRegenOpen} onClose={() => setFullRegenOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Alles mit KI anpassen</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              label="Anpassungswunsch / Prompt"
+              fullWidth
+              multiline
+              minRows={4}
+              value={fullRegenPrompt}
+              onChange={(e) => setFullRegenPrompt(e.target.value)}
+              placeholder="z.B.: Beschreibung präzisieren, Schritte zur Reproduktion ergänzen..."
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setFullRegenOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleFullRegen} variant="contained" disabled={!fullRegenPrompt.trim() || ai.isLoading}>
+              {ai.isLoading ? 'Wird angepasst...' : 'Anpassen'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              🏷️ Title
-            </Typography>
-            <EditableField
-              value={item.title}
-              onChange={(v) => updateField('title', v)}
-            />
-          </Box>
-
-          <Box>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              📝 Description
+              📝 {labels.description}
             </Typography>
             <EditableField
               value={item.description}
@@ -83,7 +158,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              ✅ Expected Result (SOLL)
+              ✅ {labels.expectedResult}
             </Typography>
             <EditableField
               value={item.expectedResult}
@@ -94,7 +169,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              ❌ Actual Result (IST)
+              ❌ {labels.actualResult}
             </Typography>
             <EditableField
               value={item.actualResult}
@@ -105,14 +180,14 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              🔁 Steps to Reproduce
+              🔁 {labels.stepsToReproduce}
             </Typography>
             {item.stepsToReproduce.map((step, i) => (
               <Box key={i} sx={{ mb: 1 }}>
                 <EditableField
                   value={step}
                   onChange={(v) => updateArrayField('stepsToReproduce', i, v)}
-                  label={`Step ${i + 1}`}
+                  label={`${labels.step} ${i + 1}`}
                   multiline
                 />
               </Box>
@@ -121,7 +196,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              🛠️ Technical Details
+              🛠️ {labels.technicalDetails}
             </Typography>
             <EditableField
               value={item.technicalDetails}
@@ -132,7 +207,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              📊 Severity / Priority
+              📊 {labels.severityPriority}
             </Typography>
             <EditableField
               value={item.severityPriority}
@@ -143,7 +218,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              📚 Resources
+              📚 {labels.resources}
             </Typography>
             <EditableField
               value={item.resources}
@@ -154,7 +229,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              🚫 Out of Scope
+              🚫 {labels.outOfScope}
             </Typography>
             <EditableField
               value={item.outOfScope}
@@ -165,7 +240,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
 
           <Box>
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              📷 Screenshots / Bilder
+              📷 {labels.screenshots}
             </Typography>
             <input
               ref={fileInputRef}
@@ -181,7 +256,7 @@ export function BugEditor({ item, store, settings, onDelete }: BugEditorProps) {
               startIcon={<AddIcon />}
               onClick={() => fileInputRef.current?.click()}
             >
-              Bilder hinzufügen
+              {labels.addImages}
             </Button>
             {images.length > 0 && (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>

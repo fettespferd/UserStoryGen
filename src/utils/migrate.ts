@@ -13,9 +13,27 @@ const DEFAULT_EN: UserStoryENContent = {
   roles: '',
   prerequisites: [''],
   userFlows: { happyPath: ['1. User …', '2. System …'] },
-  resources: [''],
   outOfScope: [''],
 };
+
+function mergeToLinks(
+  de?: { anhaenge?: unknown; jiraTicket?: unknown },
+  en?: { resources?: unknown }
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (v: string) => {
+    const s = v?.trim();
+    if (s && !seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+  };
+  if (de?.anhaenge && Array.isArray(de.anhaenge)) de.anhaenge.forEach((x) => add(String(x)));
+  if (de?.jiraTicket && String(de.jiraTicket).trim()) add(String(de.jiraTicket));
+  if (en?.resources && Array.isArray(en.resources)) en.resources.forEach((x) => add(String(x)));
+  return out;
+}
 
 export function migrateItem(raw: unknown): StoryItem | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -27,28 +45,41 @@ export function migrateItem(raw: unknown): StoryItem | null {
   }
 
   if (obj.type === 'user-story') {
-    const story = raw as UserStory & { de?: Record<string, unknown>; en?: Record<string, unknown> };
+    const story = raw as UserStory & { de?: Record<string, unknown>; en?: Record<string, unknown>; links?: string[] };
+    const de = story.de as { anhaenge?: unknown; jiraTicket?: unknown; voraussetzungen?: unknown; outOfScope?: unknown } | undefined;
+    const en = story.en as { resources?: unknown; prerequisites?: unknown; outOfScope?: unknown } | undefined;
+    const links = Array.isArray(story.links) && story.links.length > 0
+      ? story.links
+      : mergeToLinks(de, en);
     return {
       ...story,
       copyBook: story.copyBook ?? [],
       images: story.images ?? [],
+      links,
       de: story.de ? {
-        ...story.de,
-        voraussetzungen: toStrArray(story.de.voraussetzungen),
-        anhaenge: toStrArray(story.de.anhaenge),
-        outOfScope: toStrArray(story.de.outOfScope),
+        beschreibung: story.de.beschreibung,
+        akzeptanzkriterien: story.de.akzeptanzkriterien,
+        voraussetzungen: toStrArray(de?.voraussetzungen),
+        nutzerflows: story.de.nutzerflows,
+        outOfScope: toStrArray(de?.outOfScope),
       } : undefined,
-      en: story.en ? {
-        ...story.en,
-        prerequisites: toStrArray(story.en.prerequisites),
-        resources: toStrArray(story.en.resources),
-        outOfScope: toStrArray(story.en.outOfScope),
-      } : undefined,
+      en: story.en ? (() => {
+        const { resources: _r, ...rest } = story.en as Record<string, unknown>;
+        return {
+          ...rest,
+          prerequisites: toStrArray(en?.prerequisites),
+          outOfScope: toStrArray(en?.outOfScope),
+        };
+      })() : undefined,
     } as UserStory;
   }
 
   if (obj.type === 'user-story-de') {
     const old = raw as UserStoryDE;
+    const links = mergeToLinks(
+      { anhaenge: old.anhaenge, jiraTicket: old.jiraTicket },
+      undefined
+    );
     return {
       id: old.id,
       type: 'user-story',
@@ -58,11 +89,10 @@ export function migrateItem(raw: unknown): StoryItem | null {
         akzeptanzkriterien: old.akzeptanzkriterien,
         voraussetzungen: toStrArray(old.voraussetzungen),
         nutzerflows: old.nutzerflows,
-        anhaenge: toStrArray(old.anhaenge),
         outOfScope: toStrArray(old.outOfScope),
-        jiraTicket: old.jiraTicket,
       },
       en: DEFAULT_EN,
+      links,
       copyBook: [],
       images: [],
     };
@@ -70,6 +100,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
 
   if (obj.type === 'user-story-en') {
     const old = raw as UserStoryEN;
+    const links = mergeToLinks(undefined, { resources: old.resources });
     return {
       id: old.id,
       type: 'user-story',
@@ -79,9 +110,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
         akzeptanzkriterien: ['…', '…', '…'],
         voraussetzungen: [''],
         nutzerflows: { happyFlow: ['1. User …', '2. System …'] },
-        anhaenge: [''],
         outOfScope: [''],
-        jiraTicket: '',
       },
       en: {
         description: old.description,
@@ -90,9 +119,9 @@ export function migrateItem(raw: unknown): StoryItem | null {
         roles: old.roles,
         prerequisites: toStrArray(old.prerequisites),
         userFlows: old.userFlows,
-        resources: toStrArray(old.resources),
         outOfScope: toStrArray(old.outOfScope),
       },
+      links,
       copyBook: [],
       images: [],
     };
@@ -102,6 +131,10 @@ export function migrateItem(raw: unknown): StoryItem | null {
   const id = obj.id ?? obj.type;
   if (id && typeof id === 'string') {
     console.warn('[UserStoryGen] Unbekannter Story-Typ:', obj.type, '- wird als minimale User Story geladen');
+    const links = mergeToLinks(
+      { anhaenge: obj.anhaenge, jiraTicket: obj.jiraTicket },
+      { resources: obj.resources }
+    );
     return {
       id: String(id),
       type: 'user-story',
@@ -116,11 +149,10 @@ export function migrateItem(raw: unknown): StoryItem | null {
             : ['1. User …', '2. System …'],
           fehlerszenario: undefined,
         },
-        anhaenge: toStrArray(obj.anhaenge),
         outOfScope: toStrArray(obj.outOfScope),
-        jiraTicket: String(obj.jiraTicket ?? ''),
       },
       en: DEFAULT_EN,
+      links,
       copyBook: Array.isArray(obj.copyBook)
         ? obj.copyBook.filter(
             (e: unknown): e is { elementName: string; textDE: string; textEN: string } =>

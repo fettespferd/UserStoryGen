@@ -1,44 +1,35 @@
-import { Box, Paper, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import DescriptionIcon from '@mui/icons-material/Description';
+import { Paper, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 
 export type TicketTypeChoice = 'user-story' | 'bug-de' | 'bug-en';
 
 type Mode = 'user-story' | 'bug';
-type Lang = 'de' | 'en';
 
 interface TicketTypeSelectorProps {
   value: TicketTypeChoice | null;
-  onNewStory: (type: TicketTypeChoice) => void;
+  onNewStory?: (type: TicketTypeChoice) => void;
+  /** Nur Typ ändern, ohne zu erstellen (für expliziten Erstellen-Button) */
+  onChange?: (type: TicketTypeChoice) => void;
 }
-
-const FLAGS = { de: '🇩🇪', en: '🇬🇧' } as const;
 
 function getModeFromValue(v: TicketTypeChoice | null): Mode {
   if (!v) return 'user-story';
   return v.startsWith('bug') ? 'bug' : 'user-story';
 }
 
-function getLangFromValue(v: TicketTypeChoice | null): Lang {
-  if (!v) return 'de';
-  return v === 'bug-en' ? 'en' : 'de';
-}
-
-export function TicketTypeSelector({ value, onNewStory }: TicketTypeSelectorProps) {
+export function TicketTypeSelector({ value, onNewStory, onChange }: TicketTypeSelectorProps) {
   const mode = getModeFromValue(value);
-  const lang = getLangFromValue(value);
+  const handleChange = onChange ?? onNewStory ?? (() => {});
 
   const handleModeChange = (_: React.MouseEvent, newMode: Mode | null) => {
-    if (newMode) onNewStory(newMode === 'user-story' ? 'user-story' : (`bug-${lang}` as TicketTypeChoice));
-  };
-
-  const handleLangChange = (_: React.MouseEvent, newLang: Lang | null) => {
-    if (newLang && mode === 'bug') onNewStory(`bug-${newLang}` as TicketTypeChoice);
+    if (newMode) {
+      const type = newMode === 'user-story' ? 'user-story' : 'bug-de';
+      handleChange(type);
+    }
   };
 
   return (
     <Paper
-      elevation={2}
+      elevation={0}
       sx={{
         p: 2,
         bgcolor: 'background.paper',
@@ -47,7 +38,7 @@ export function TicketTypeSelector({ value, onNewStory }: TicketTypeSelectorProp
         borderColor: 'divider',
       }}
     >
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 600, letterSpacing: 0.5 }}>
         Modus
       </Typography>
       <ToggleButtonGroup
@@ -55,89 +46,76 @@ export function TicketTypeSelector({ value, onNewStory }: TicketTypeSelectorProp
         exclusive
         onChange={handleModeChange}
         fullWidth
-        sx={{ mb: 2 }}
+        sx={{
+          mb: 2,
+          bgcolor: 'action.hover',
+          borderRadius: 2,
+          p: 0.5,
+          '& .MuiToggleButtonGroup-grouped': {
+            border: 'none !important',
+            borderRadius: '12px !important',
+            transition: 'all 0.2s ease',
+          },
+          '& .MuiToggleButton-root': {
+            border: 'none !important',
+          },
+        }}
       >
         <ToggleButton
           value="user-story"
           sx={{
             py: 1.5,
+            px: 2,
             textTransform: 'none',
-            borderRadius: 1,
+            fontWeight: 600,
+            fontSize: '0.95rem',
             '&.Mui-selected': {
               bgcolor: 'primary.main',
               color: 'primary.contrastText',
-              '&:hover': { bgcolor: 'primary.dark' },
+              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.35)',
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                boxShadow: '0 2px 12px rgba(59, 130, 246, 0.45)',
+              },
+            },
+            '&:not(.Mui-selected)': {
+              color: 'text.secondary',
+              '&:hover': {
+                bgcolor: 'action.selected',
+                color: 'text.primary',
+              },
             },
           }}
         >
-          <DescriptionIcon sx={{ mr: 1, fontSize: 20 }} />
           User Story
         </ToggleButton>
         <ToggleButton
           value="bug"
           sx={{
             py: 1.5,
+            px: 2,
             textTransform: 'none',
-            borderRadius: 1,
+            fontWeight: 600,
+            fontSize: '0.95rem',
             '&.Mui-selected': {
               bgcolor: 'primary.main',
               color: 'primary.contrastText',
-              '&:hover': { bgcolor: 'primary.dark' },
+              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.35)',
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                boxShadow: '0 2px 12px rgba(59, 130, 246, 0.45)',
+              },
+            },
+            '&:not(.Mui-selected)': {
+              color: 'text.secondary',
+              '&:hover': {
+                bgcolor: 'action.selected',
+                color: 'text.primary',
+              },
             },
           }}
         >
-          <BugReportIcon sx={{ mr: 1, fontSize: 20 }} />
           Bug Report
-        </ToggleButton>
-      </ToggleButtonGroup>
-
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        Sprache {mode === 'bug' && '(für Bug Report)'}
-      </Typography>
-      <ToggleButtonGroup
-        value={lang}
-        exclusive
-        onChange={handleLangChange}
-        fullWidth
-        disabled={mode === 'user-story'}
-      >
-        <ToggleButton
-          value="de"
-          sx={{
-            py: 1.5,
-            textTransform: 'none',
-            borderRadius: 1,
-            fontSize: '1rem',
-            '&.Mui-selected': {
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { bgcolor: 'primary.dark' },
-            },
-          }}
-        >
-          <Box component="span" sx={{ mr: 1, fontSize: '1.25rem' }}>
-            {FLAGS.de}
-          </Box>
-          Deutsch
-        </ToggleButton>
-        <ToggleButton
-          value="en"
-          sx={{
-            py: 1.5,
-            textTransform: 'none',
-            borderRadius: 1,
-            fontSize: '1rem',
-            '&.Mui-selected': {
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              '&:hover': { bgcolor: 'primary.dark' },
-            },
-          }}
-        >
-          <Box component="span" sx={{ mr: 1, fontSize: '1.25rem' }}>
-            {FLAGS.en}
-          </Box>
-          English
         </ToggleButton>
       </ToggleButtonGroup>
     </Paper>

@@ -22,10 +22,10 @@ describe('toMarkdown', () => {
     expect(md).toContain('📝 Beschreibung');
     expect(md).toContain('### **✅ Akzeptanzkriterien**');
     expect(md).toContain('AC1: Testbar');
-    expect(md).toContain('### **🎫 Jira Ticket**');
-    expect(md).toContain('PROJ-123');
-    expect(md).toContain('- Login');
+    expect(md).toContain('### **📚 Anhänge / Links**');
     expect(md).toContain('- Design');
+    expect(md).toContain('- PROJ-123');
+    expect(md).toContain('- Login');
     expect(md).toContain('- Nichts');
   });
 
@@ -45,8 +45,8 @@ describe('toMarkdown', () => {
       outOfScope: '-',
     };
     const md = toMarkdown(bug);
-    expect(md).toContain('🏷️ Title');
+    expect(md).toContain('🏷️ Titel');
     expect(md).toContain('Fehler beim Speichern');
-    expect(md).toContain('✅ Expected Result (SOLL)');
+    expect(md).toContain('✅ Erwartetes Ergebnis (SOLL)');
   });
 });

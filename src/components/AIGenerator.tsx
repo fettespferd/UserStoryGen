@@ -8,19 +8,20 @@ import {
   CircularProgress,
   Box,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type { TicketTypeChoice } from './TicketTypeSelector';
-import type { Settings, StoryItem } from '../types/story';
+import type { Settings, StoryItem, ProjectType } from '../types/story';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 
 interface AIGeneratorProps {
   ai: UseAIGeneratorReturn;
   settings: Settings | null;
   onGenerated: (item: StoryItem) => void;
-  selectedType: TicketTypeChoice | null;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -32,7 +33,9 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function AIGenerator({ ai, settings, onGenerated, selectedType }: AIGeneratorProps) {
+export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
+  const [selectedType, setSelectedType] = useState<TicketTypeChoice>('user-story');
+  const [project, setProject] = useState<ProjectType>('aokn');
   const [prompt, setPrompt] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,21 +58,26 @@ export function AIGenerator({ ai, settings, onGenerated, selectedType }: AIGener
   };
 
   const handleGenerate = async () => {
-    if (!selectedType) return;
-    if (!prompt.trim() && images.length === 0) return;
-    const result = await ai.generate(prompt, selectedType, settings, images.length ? images : undefined);
+    if (!prompt.trim()) return;
+    const result = await ai.generate(
+      prompt,
+      selectedType,
+      settings,
+      images.length ? images : undefined,
+      project
+    );
     if (result) {
       onGenerated(result);
     }
   };
 
-  const canGenerate = settings?.apiKey && selectedType && (prompt.trim() || images.length > 0);
+  const canGenerate = settings?.apiKey && prompt.trim().length > 0;
 
   return (
     <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AutoAwesomeIcon color="primary" />
-        KI-Generierung
+        Mit KI generieren
       </Typography>
 
       {!settings?.apiKey && (
@@ -77,6 +85,52 @@ export function AIGenerator({ ai, settings, onGenerated, selectedType }: AIGener
           API-Key in den Einstellungen hinterlegen, um die KI-Generierung zu nutzen.
         </Alert>
       )}
+
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+          Typ
+        </Typography>
+        <ToggleButtonGroup
+          value={selectedType}
+          exclusive
+          onChange={(_, v) => v && setSelectedType(v)}
+          fullWidth
+          size="small"
+          sx={{
+            bgcolor: 'action.hover',
+            borderRadius: 1.5,
+            p: 0.5,
+            '& .MuiToggleButton-root': { border: 'none', py: 1, textTransform: 'none', fontWeight: 600 },
+            '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText' },
+          }}
+        >
+          <ToggleButton value="user-story">User Story</ToggleButton>
+          <ToggleButton value="bug-de">Bug Report</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+          Projekt
+        </Typography>
+        <ToggleButtonGroup
+          value={project}
+          exclusive
+          onChange={(_, v) => v && setProject(v)}
+          fullWidth
+          size="small"
+          sx={{
+            bgcolor: 'action.hover',
+            borderRadius: 1.5,
+            p: 0.5,
+            '& .MuiToggleButton-root': { border: 'none', py: 1, textTransform: 'none', fontWeight: 600 },
+            '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText' },
+          }}
+        >
+          <ToggleButton value="aokn">AOKN</ToggleButton>
+          <ToggleButton value="healthmatch">HealthMatch</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
 
       <Box sx={{ mb: 2 }}>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -146,15 +200,18 @@ export function AIGenerator({ ai, settings, onGenerated, selectedType }: AIGener
         multiline
         minRows={4}
         fullWidth
-        placeholder="z.B.: Als Patient möchte ich meine Termine online buchen können... Oder leer lassen, wenn nur Design-Bilder verwendet werden."
+        required
+        placeholder="z.B.: Als Patient möchte ich meine Termine online buchen können..."
         sx={{ mb: 2 }}
       />
 
       <Button
         variant="contained"
+        fullWidth
         startIcon={ai.isLoading ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
         onClick={handleGenerate}
         disabled={!canGenerate || ai.isLoading}
+        sx={{ py: 1.5 }}
       >
         {ai.isLoading ? 'Generiere...' : 'Generieren'}
       </Button>
