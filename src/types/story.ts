@@ -9,13 +9,13 @@ export type StoryItem = UserStory | BugReport;
 export interface UserStoryDEContent {
   beschreibung: string;
   akzeptanzkriterien: string[];
-  voraussetzungen: string;
+  voraussetzungen: string[];
   nutzerflows: {
     happyFlow: string[];
     fehlerszenario?: string[];
   };
-  anhaenge: string;
-  outOfScope: string;
+  anhaenge: string[];
+  outOfScope: string[];
   jiraTicket: string;
 }
 
@@ -26,13 +26,13 @@ export interface UserStoryENContent {
   acceptanceCriteria: string[];
   todos: { be: string[]; fe: string[]; qa: string[] };
   roles: string;
-  prerequisites: string;
+  prerequisites: string[];
   userFlows: {
     happyPath: string[];
     errorScenario?: string[];
   };
-  resources: string;
-  outOfScope: string;
+  resources: string[];
+  outOfScope: string[];
 }
 
 // ── Copy Book (UI-Texte pro Story) ──
@@ -63,10 +63,10 @@ export interface UserStoryDE {
   type: 'user-story-de';
   beschreibung: string;
   akzeptanzkriterien: string[];
-  voraussetzungen: string;
+  voraussetzungen: string[];
   nutzerflows: { happyFlow: string[]; fehlerszenario?: string[] };
-  anhaenge: string;
-  outOfScope: string;
+  anhaenge: string[];
+  outOfScope: string[];
   jiraTicket: string;
 }
 export interface UserStoryEN {
@@ -76,10 +76,10 @@ export interface UserStoryEN {
   acceptanceCriteria: string[];
   todos: { be: string[]; fe: string[]; qa: string[] };
   roles: string;
-  prerequisites: string;
+  prerequisites: string[];
   userFlows: { happyPath: string[]; errorScenario?: string[] };
-  resources: string;
-  outOfScope: string;
+  resources: string[];
+  outOfScope: string[];
 }
 
 // ── Bug Report (DE/EN) ──

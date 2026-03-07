@@ -401,13 +401,19 @@ function parseAIResponse(
     const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+    const toStrArr = (v: unknown): string[] => {
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      if (typeof v === 'string' && v.trim()) return v.split(/\n/).map((s) => s.trim()).filter(Boolean);
+      return [];
+    };
+
     if (type === 'user-story-de') {
       return {
         id,
         type: 'user-story-de',
         beschreibung: String(parsed.beschreibung ?? ''),
         akzeptanzkriterien: Array.isArray(parsed.akzeptanzkriterien) ? parsed.akzeptanzkriterien.map(String) : [],
-        voraussetzungen: String(parsed.voraussetzungen ?? ''),
+        voraussetzungen: toStrArr(parsed.voraussetzungen),
         nutzerflows: {
           happyFlow: Array.isArray((parsed.nutzerflows as Record<string, unknown>)?.happyFlow)
             ? (parsed.nutzerflows as { happyFlow: string[] }).happyFlow
@@ -416,8 +422,8 @@ function parseAIResponse(
             ? (parsed.nutzerflows as { fehlerszenario: string[] }).fehlerszenario
             : undefined,
         },
-        anhaenge: String(parsed.anhaenge ?? ''),
-        outOfScope: String(parsed.outOfScope ?? ''),
+        anhaenge: toStrArr(parsed.anhaenge),
+        outOfScope: toStrArr(parsed.outOfScope),
         jiraTicket: String(parsed.jiraTicket ?? ''),
       };
     }
@@ -430,7 +436,7 @@ function parseAIResponse(
         acceptanceCriteria: Array.isArray(parsed.acceptanceCriteria) ? parsed.acceptanceCriteria.map(String) : [],
         todos: { be: [], fe: [], qa: [] },
         roles: String(parsed.roles ?? ''),
-        prerequisites: String(parsed.prerequisites ?? ''),
+        prerequisites: toStrArr(parsed.prerequisites),
         userFlows: {
           happyPath: Array.isArray((parsed.userFlows as Record<string, unknown>)?.happyPath)
             ? (parsed.userFlows as { happyPath: string[] }).happyPath
@@ -439,8 +445,8 @@ function parseAIResponse(
             ? (parsed.userFlows as { errorScenario: string[] }).errorScenario
             : undefined,
         },
-        resources: String(parsed.resources ?? ''),
-        outOfScope: String(parsed.outOfScope ?? ''),
+        resources: toStrArr(parsed.resources),
+        outOfScope: toStrArr(parsed.outOfScope),
       };
     }
 

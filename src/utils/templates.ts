@@ -3,11 +3,11 @@ import type { UserStory, UserStoryDE, UserStoryEN, BugReport } from '../types/st
 const DE_CONTENT = {
   beschreibung: 'Als [Rolle] möchte ich [Ziel], damit [Nutzen].',
   akzeptanzkriterien: [
-    'AC1: [Testbar, messbar, nachvollziehbar]',
-    'AC2: [Beispiele/Randfälle einschließen]',
-    'AC3: [Nicht-funktionale Anforderungen: Technik, UX, Performance, Sicherheit, Datenschutz]',
+    '[Testbar, messbar, nachvollziehbar]',
+    '[Beispiele/Randfälle einschließen]',
+    '[Nicht-funktionale Anforderungen: Technik, UX, Performance, Sicherheit, Datenschutz]',
   ],
-  voraussetzungen: '[Feature Flags, Daten, Freigaben]',
+  voraussetzungen: ['[Feature Flags, Daten, Freigaben]'],
   nutzerflows: {
     happyFlow: ['1. User …', '2. System …', '3. System …', '4. System …'],
     fehlerszenario: [
@@ -17,21 +17,21 @@ const DE_CONTENT = {
       '4. Zurück zur Maske stellt Eingaben wieder her.',
     ],
   },
-  anhaenge: '[Designs, APIs, Schemas]',
-  outOfScope: '[Explizit Nicht-Bestandteil]',
+  anhaenge: ['[Designs, APIs, Schemas]'],
+  outOfScope: ['[Explizit Nicht-Bestandteil]'],
   jiraTicket: '[Link oder Referenz]',
 };
 
 const EN_CONTENT = {
   description: 'As a [role] I want [goal], so that [benefit].',
   acceptanceCriteria: [
-    'AC1: [Testable, measurable, verifiable]',
-    'AC2: [Include examples/edge cases]',
-    'AC3: [Non-functional: tech, UX, performance, security, privacy]',
+    '[Testable, measurable, verifiable]',
+    '[Include examples/edge cases]',
+    '[Non-functional: tech, UX, performance, security, privacy]',
   ],
   todos: { be: [] as string[], fe: [] as string[], qa: [] as string[] },
   roles: '[Users, stakeholders]',
-  prerequisites: '[Feature flags, data, approvals]',
+  prerequisites: ['[Feature flags, data, approvals]'],
   userFlows: {
     happyPath: ['1. User …', '2. System …', '3. System …', '4. System …'],
     errorScenario: [
@@ -41,8 +41,8 @@ const EN_CONTENT = {
       '4. Back to form restores inputs.',
     ],
   },
-  resources: '[Designs, APIs, schemas]',
-  outOfScope: '[Explicitly not included]',
+  resources: ['[Designs, APIs, schemas]'],
+  outOfScope: ['[Explicitly not included]'],
 };
 
 export function createUserStory(id: string, title = 'User Story'): UserStory {

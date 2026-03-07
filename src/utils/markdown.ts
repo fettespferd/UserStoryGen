@@ -5,6 +5,7 @@ import type {
   BugReport,
   MarkdownHeadingLevel,
 } from '../types/story';
+import { stripAcPrefix } from './format';
 
 const HEADING_PREFIX: Record<MarkdownHeadingLevel, string> = {
   h1: '#',
@@ -90,11 +91,11 @@ function userStoryDEToMarkdown(
   lines.push('');
   lines.push(heading(h, '✅ Akzeptanzkriterien'));
   lines.push('');
-  story.akzeptanzkriterien.forEach((ac) => lines.push(ac));
+  story.akzeptanzkriterien.forEach((ac, i) => lines.push(`AC${i + 1}: ${stripAcPrefix(ac)}`));
   lines.push('');
   lines.push(heading(h, '🔑 Voraussetzungen'));
   lines.push('');
-  lines.push(story.voraussetzungen);
+  (story.voraussetzungen ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🔀 Nutzerflows'));
   lines.push('');
@@ -110,11 +111,11 @@ function userStoryDEToMarkdown(
   lines.push('');
   lines.push(heading(h, '📚 Anhänge'));
   lines.push('');
-  lines.push(story.anhaenge);
+  (story.anhaenge ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
-  lines.push(story.outOfScope);
+  (story.outOfScope ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🎫 Jira Ticket'));
   lines.push('');
@@ -135,7 +136,7 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, '✅ Acceptance Criteria'));
   lines.push('');
-  story.acceptanceCriteria.forEach((ac) => lines.push(ac));
+  story.acceptanceCriteria.forEach((ac, i) => lines.push(`AC${i + 1}: ${stripAcPrefix(ac)}`));
   lines.push('');
   lines.push(heading(h, "🗒️ To-Do's (BE / FE / QA)"));
   lines.push('');
@@ -151,7 +152,7 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, '🔑 Prerequisites'));
   lines.push('');
-  lines.push(story.prerequisites);
+  (story.prerequisites ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🔀 User Flows'));
   lines.push('');
@@ -167,11 +168,11 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, '📚 Resources'));
   lines.push('');
-  lines.push(story.resources);
+  (story.resources ?? []).forEach((v) => lines.push(`- ${v}`));
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
-  lines.push(story.outOfScope);
+  (story.outOfScope ?? []).forEach((v) => lines.push(`- ${v}`));
 
   return lines.join('\n');
 }

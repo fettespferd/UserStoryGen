@@ -15,6 +15,7 @@ import {
   Drawer,
   useTheme,
   useMediaQuery,
+  Alert,
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -115,11 +116,13 @@ function App() {
   }, [store, storage]);
 
   useEffect(() => {
-    if (store.currentItem && storage.hasAccess) {
-      const t = setTimeout(() => storage.saveStory(store.currentItem!), 1000);
-      return () => clearTimeout(t);
-    }
-  }, [store.currentItem, storage.hasAccess]);
+    if (!store.currentItem || !storage.hasAccess) return;
+    const item = store.currentItem;
+    const t = setTimeout(() => {
+      storage.saveStory(item).catch((err) => console.error('[UserStoryGen] Speichern fehlgeschlagen:', err));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [store.currentItem, storage.hasAccess, storage.saveStory]);
 
   const currentItem = store.currentItem;
   const isStory = currentItem?.type === 'user-story';
@@ -170,6 +173,12 @@ function App() {
           >
             User Stories & Bug Reports
           </Typography>
+
+          {!storage.hasAccess && storage.isSupported && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Ordner auswählen (Einstellungen → Ordner auswählen), damit Stories im Dateisystem gespeichert werden. Ohne Ordner gehen alle Daten bei Reload verloren.
+            </Alert>
+          )}
 
           <Box sx={{ display: 'flex', gap: 3, flexDirection: isMobile ? 'column' : 'row' }}>
             <Box sx={{ flex: isMobile ? 'none' : '0 0 280px' }}>

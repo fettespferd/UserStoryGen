@@ -1,14 +1,20 @@
 import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, UserStoryENContent } from '../types/story';
 
+function toStrArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String).filter(Boolean);
+  if (typeof v === 'string' && v.trim()) return v.split(/\n/).map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
 const DEFAULT_EN: UserStoryENContent = {
   description: 'As a [role] I want [goal], so that [benefit].',
-  acceptanceCriteria: ['AC1: …', 'AC2: …', 'AC3: …'],
+  acceptanceCriteria: ['…', '…', '…'],
   todos: { be: [], fe: [], qa: [] },
   roles: '',
-  prerequisites: '',
+  prerequisites: [''],
   userFlows: { happyPath: ['1. User …', '2. System …'] },
-  resources: '',
-  outOfScope: '',
+  resources: [''],
+  outOfScope: [''],
 };
 
 export function migrateItem(raw: unknown): StoryItem | null {
@@ -21,12 +27,24 @@ export function migrateItem(raw: unknown): StoryItem | null {
   }
 
   if (obj.type === 'user-story') {
-    const story = raw as UserStory;
+    const story = raw as UserStory & { de?: Record<string, unknown>; en?: Record<string, unknown> };
     return {
       ...story,
       copyBook: story.copyBook ?? [],
       images: story.images ?? [],
-    };
+      de: story.de ? {
+        ...story.de,
+        voraussetzungen: toStrArray(story.de.voraussetzungen),
+        anhaenge: toStrArray(story.de.anhaenge),
+        outOfScope: toStrArray(story.de.outOfScope),
+      } : undefined,
+      en: story.en ? {
+        ...story.en,
+        prerequisites: toStrArray(story.en.prerequisites),
+        resources: toStrArray(story.en.resources),
+        outOfScope: toStrArray(story.en.outOfScope),
+      } : undefined,
+    } as UserStory;
   }
 
   if (obj.type === 'user-story-de') {
@@ -38,10 +56,10 @@ export function migrateItem(raw: unknown): StoryItem | null {
       de: {
         beschreibung: old.beschreibung,
         akzeptanzkriterien: old.akzeptanzkriterien,
-        voraussetzungen: old.voraussetzungen,
+        voraussetzungen: toStrArray(old.voraussetzungen),
         nutzerflows: old.nutzerflows,
-        anhaenge: old.anhaenge,
-        outOfScope: old.outOfScope,
+        anhaenge: toStrArray(old.anhaenge),
+        outOfScope: toStrArray(old.outOfScope),
         jiraTicket: old.jiraTicket,
       },
       en: DEFAULT_EN,
@@ -58,11 +76,11 @@ export function migrateItem(raw: unknown): StoryItem | null {
       title: old.description?.slice(0, 60) || 'User Story',
       de: {
         beschreibung: 'Als [Rolle] möchte ich [Ziel], damit [Nutzen].',
-        akzeptanzkriterien: ['AC1: …', 'AC2: …', 'AC3: …'],
-        voraussetzungen: '',
+        akzeptanzkriterien: ['…', '…', '…'],
+        voraussetzungen: [''],
         nutzerflows: { happyFlow: ['1. User …', '2. System …'] },
-        anhaenge: '',
-        outOfScope: '',
+        anhaenge: [''],
+        outOfScope: [''],
         jiraTicket: '',
       },
       en: {
@@ -70,10 +88,10 @@ export function migrateItem(raw: unknown): StoryItem | null {
         acceptanceCriteria: old.acceptanceCriteria,
         todos: old.todos,
         roles: old.roles,
-        prerequisites: old.prerequisites,
+        prerequisites: toStrArray(old.prerequisites),
         userFlows: old.userFlows,
-        resources: old.resources,
-        outOfScope: old.outOfScope,
+        resources: toStrArray(old.resources),
+        outOfScope: toStrArray(old.outOfScope),
       },
       copyBook: [],
       images: [],
@@ -91,15 +109,15 @@ export function migrateItem(raw: unknown): StoryItem | null {
       de: {
         beschreibung: String(obj.beschreibung ?? obj.description ?? ''),
         akzeptanzkriterien: Array.isArray(obj.akzeptanzkriterien) ? obj.akzeptanzkriterien.map(String) : ['AC1: …'],
-        voraussetzungen: String(obj.voraussetzungen ?? obj.prerequisites ?? ''),
+        voraussetzungen: toStrArray(obj.voraussetzungen ?? obj.prerequisites),
         nutzerflows: {
           happyFlow: Array.isArray((obj.nutzerflows as { happyFlow?: string[] })?.happyFlow)
             ? (obj.nutzerflows as { happyFlow: string[] }).happyFlow
             : ['1. User …', '2. System …'],
           fehlerszenario: undefined,
         },
-        anhaenge: String(obj.anhaenge ?? ''),
-        outOfScope: String(obj.outOfScope ?? ''),
+        anhaenge: toStrArray(obj.anhaenge),
+        outOfScope: toStrArray(obj.outOfScope),
         jiraTicket: String(obj.jiraTicket ?? ''),
       },
       en: DEFAULT_EN,

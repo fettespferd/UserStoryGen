@@ -7,6 +7,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { EditableField } from './EditableField';
 import { MarkdownPreview } from './MarkdownPreview';
+import { stripAcPrefix } from '../utils/format';
 import { StoryCopyBookSection } from './StoryCopyBookSection';
 import type { UserStory } from '../types/story';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
@@ -102,7 +103,7 @@ function StoryLangEditor({
                 </IconButton>
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <EditableField value={ac} onChange={(v) => updateUserStoryArrayField('de', 'akzeptanzkriterien', i, v)} label={`AC${i + 1}`} multiline />
+                <EditableField value={stripAcPrefix(ac)} onChange={(v) => updateUserStoryArrayField('de', 'akzeptanzkriterien', i, v)} label={`AC${i + 1}`} multiline />
               </Box>
               <IconButton size="small" onClick={() => updateUserStoryField('de', 'akzeptanzkriterien', c.akzeptanzkriterien.filter((_, idx) => idx !== i))} color="error" title="Entfernen">
                 <DeleteIcon fontSize="small" />
@@ -111,10 +112,30 @@ function StoryLangEditor({
           ))}
         </Box>
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
             🔑 Voraussetzungen
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'voraussetzungen', [...(c.voraussetzungen ?? []), ''])}>
+              Hinzufügen
+            </Button>
           </Typography>
-          <EditableField value={c.voraussetzungen} onChange={(v) => updateUserStoryField('de', 'voraussetzungen', v)} multiline />
+          {(c.voraussetzungen ?? []).map((v, i) => (
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...(c.voraussetzungen ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('de', 'voraussetzungen', arr); } }} disabled={i === 0} title="Nach oben">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...(c.voraussetzungen ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('de', 'voraussetzungen', arr); } }} disabled={i === (c.voraussetzungen?.length ?? 0) - 1} title="Nach unten">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField value={v} onChange={(val) => { const arr = [...(c.voraussetzungen ?? [])]; arr[i] = val; updateUserStoryField('de', 'voraussetzungen', arr); }} label={`${i + 1}`} multiline />
+              </Box>
+              <IconButton size="small" onClick={() => updateUserStoryField('de', 'voraussetzungen', (c.voraussetzungen ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
         </Box>
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
@@ -122,16 +143,26 @@ function StoryLangEditor({
             <SectionRegenButton section="nutzerflows.happyFlow" />
           </Typography>
           {c.nutzerflows.happyFlow.map((step, i) => (
-            <Box key={i} sx={{ mb: 1 }}>
-              <EditableField
-                value={step}
-                onChange={(v) => {
-                  const arr = [...c.nutzerflows.happyFlow];
-                  arr[i] = v;
-                  updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr);
-                }}
-                label={`Schritt ${i + 1}`}
-              />
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...c.nutzerflows.happyFlow]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr); } }} disabled={i === 0} title="Nach oben">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...c.nutzerflows.happyFlow]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr); } }} disabled={i === c.nutzerflows.happyFlow.length - 1} title="Nach unten">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField
+                  value={step}
+                  onChange={(v) => {
+                    const arr = [...c.nutzerflows.happyFlow];
+                    arr[i] = v;
+                    updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr);
+                  }}
+                  label={`Schritt ${i + 1}`}
+                />
+              </Box>
             </Box>
           ))}
         </Box>
@@ -141,31 +172,81 @@ function StoryLangEditor({
               🔀 Nutzerflows – Fehlerszenario
             </Typography>
             {c.nutzerflows.fehlerszenario.map((step, i) => (
-              <Box key={i} sx={{ mb: 1 }}>
-                <EditableField
-                  value={step}
-                  onChange={(v) => {
-                    const arr = [...(c.nutzerflows.fehlerszenario ?? [])];
-                    arr[i] = v;
-                    updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr);
-                  }}
-                  label={`Schritt ${i + 1}`}
-                />
+              <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenario ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr); } }} disabled={i === 0} title="Nach oben">
+                    <ArrowUpwardIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenario ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr); } }} disabled={i === (c.nutzerflows.fehlerszenario?.length ?? 0) - 1} title="Nach unten">
+                    <ArrowDownwardIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <EditableField
+                    value={step}
+                    onChange={(v) => {
+                      const arr = [...(c.nutzerflows.fehlerszenario ?? [])];
+                      arr[i] = v;
+                      updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr);
+                    }}
+                    label={`Schritt ${i + 1}`}
+                  />
+                </Box>
               </Box>
             ))}
           </Box>
         )}
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
             📚 Anhänge
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'anhaenge', [...(c.anhaenge ?? []), ''])}>
+              Hinzufügen
+            </Button>
           </Typography>
-          <EditableField value={c.anhaenge} onChange={(v) => updateUserStoryField('de', 'anhaenge', v)} multiline />
+          {(c.anhaenge ?? []).map((v, i) => (
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...(c.anhaenge ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('de', 'anhaenge', arr); } }} disabled={i === 0} title="Nach oben">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...(c.anhaenge ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('de', 'anhaenge', arr); } }} disabled={i === (c.anhaenge?.length ?? 0) - 1} title="Nach unten">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField value={v} onChange={(val) => { const arr = [...(c.anhaenge ?? [])]; arr[i] = val; updateUserStoryField('de', 'anhaenge', arr); }} label={`${i + 1}`} multiline />
+              </Box>
+              <IconButton size="small" onClick={() => updateUserStoryField('de', 'anhaenge', (c.anhaenge ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
         </Box>
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
             🚫 Out of Scope
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'outOfScope', [...(c.outOfScope ?? []), ''])}>
+              Hinzufügen
+            </Button>
           </Typography>
-          <EditableField value={c.outOfScope} onChange={(v) => updateUserStoryField('de', 'outOfScope', v)} multiline />
+          {(c.outOfScope ?? []).map((v, i) => (
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...(c.outOfScope ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('de', 'outOfScope', arr); } }} disabled={i === 0} title="Nach oben">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...(c.outOfScope ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('de', 'outOfScope', arr); } }} disabled={i === (c.outOfScope?.length ?? 0) - 1} title="Nach unten">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField value={v} onChange={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('de', 'outOfScope', arr); }} label={`${i + 1}`} multiline />
+              </Box>
+              <IconButton size="small" onClick={() => updateUserStoryField('de', 'outOfScope', (c.outOfScope ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
         </Box>
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -228,7 +309,7 @@ function StoryLangEditor({
               </IconButton>
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <EditableField value={ac} onChange={(v) => updateUserStoryArrayField('en', 'acceptanceCriteria', i, v)} label={`AC${i + 1}`} multiline />
+              <EditableField value={stripAcPrefix(ac)} onChange={(v) => updateUserStoryArrayField('en', 'acceptanceCriteria', i, v)} label={`AC${i + 1}`} multiline />
             </Box>
             <IconButton size="small" onClick={() => updateUserStoryField('en', 'acceptanceCriteria', c.acceptanceCriteria.filter((_, idx) => idx !== i))} color="error" title="Remove">
               <DeleteIcon fontSize="small" />
@@ -243,10 +324,30 @@ function StoryLangEditor({
         <EditableField value={c.roles} onChange={(v) => updateUserStoryField('en', 'roles', v)} multiline />
       </Box>
       <Box>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           🔑 Prerequisites
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'prerequisites', [...(c.prerequisites ?? []), ''])}>
+            Add
+          </Button>
         </Typography>
-        <EditableField value={c.prerequisites} onChange={(v) => updateUserStoryField('en', 'prerequisites', v)} multiline />
+        {(c.prerequisites ?? []).map((v, i) => (
+          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+              <IconButton size="small" onClick={() => { const arr = [...(c.prerequisites ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('en', 'prerequisites', arr); } }} disabled={i === 0} title="Move up">
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => { const arr = [...(c.prerequisites ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('en', 'prerequisites', arr); } }} disabled={i === (c.prerequisites?.length ?? 0) - 1} title="Move down">
+                <ArrowDownwardIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <EditableField value={v} onChange={(val) => { const arr = [...(c.prerequisites ?? [])]; arr[i] = val; updateUserStoryField('en', 'prerequisites', arr); }} label={`${i + 1}`} multiline />
+            </Box>
+            <IconButton size="small" onClick={() => updateUserStoryField('en', 'prerequisites', (c.prerequisites ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        ))}
       </Box>
       <Box>
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
@@ -254,16 +355,26 @@ function StoryLangEditor({
           <SectionRegenButton section="userFlows.happyPath" />
         </Typography>
         {c.userFlows.happyPath.map((step, i) => (
-          <Box key={i} sx={{ mb: 1 }}>
-            <EditableField
-              value={step}
-              onChange={(v) => {
-                const arr = [...c.userFlows.happyPath];
-                arr[i] = v;
-                updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr);
-              }}
-              label={`Step ${i + 1}`}
-            />
+          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+              <IconButton size="small" onClick={() => { const arr = [...c.userFlows.happyPath]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr); } }} disabled={i === 0} title="Move up">
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => { const arr = [...c.userFlows.happyPath]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr); } }} disabled={i === c.userFlows.happyPath.length - 1} title="Move down">
+                <ArrowDownwardIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <EditableField
+                value={step}
+                onChange={(v) => {
+                  const arr = [...c.userFlows.happyPath];
+                  arr[i] = v;
+                  updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr);
+                }}
+                label={`Step ${i + 1}`}
+              />
+            </Box>
           </Box>
         ))}
       </Box>
@@ -273,31 +384,81 @@ function StoryLangEditor({
             🔀 User Flows – Error scenario
           </Typography>
           {c.userFlows.errorScenario.map((step, i) => (
-            <Box key={i} sx={{ mb: 1 }}>
-              <EditableField
-                value={step}
-                onChange={(v) => {
-                  const arr = [...(c.userFlows.errorScenario ?? [])];
-                  arr[i] = v;
-                  updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr);
-                }}
-                label={`Step ${i + 1}`}
-              />
+            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+                <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenario ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr); } }} disabled={i === 0} title="Move up">
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenario ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr); } }} disabled={i === (c.userFlows.errorScenario?.length ?? 0) - 1} title="Move down">
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <EditableField
+                  value={step}
+                  onChange={(v) => {
+                    const arr = [...(c.userFlows.errorScenario ?? [])];
+                    arr[i] = v;
+                    updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr);
+                  }}
+                  label={`Step ${i + 1}`}
+                />
+              </Box>
             </Box>
           ))}
         </Box>
       )}
       <Box>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           📚 Resources
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'resources', [...(c.resources ?? []), ''])}>
+            Add
+          </Button>
         </Typography>
-        <EditableField value={c.resources} onChange={(v) => updateUserStoryField('en', 'resources', v)} multiline />
+        {(c.resources ?? []).map((v, i) => (
+          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+              <IconButton size="small" onClick={() => { const arr = [...(c.resources ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('en', 'resources', arr); } }} disabled={i === 0} title="Move up">
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => { const arr = [...(c.resources ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('en', 'resources', arr); } }} disabled={i === (c.resources?.length ?? 0) - 1} title="Move down">
+                <ArrowDownwardIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <EditableField value={v} onChange={(val) => { const arr = [...(c.resources ?? [])]; arr[i] = val; updateUserStoryField('en', 'resources', arr); }} label={`${i + 1}`} multiline />
+            </Box>
+            <IconButton size="small" onClick={() => updateUserStoryField('en', 'resources', (c.resources ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        ))}
       </Box>
       <Box>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           🚫 Out of Scope
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'outOfScope', [...(c.outOfScope ?? []), ''])}>
+            Add
+          </Button>
         </Typography>
-        <EditableField value={c.outOfScope} onChange={(v) => updateUserStoryField('en', 'outOfScope', v)} multiline />
+        {(c.outOfScope ?? []).map((v, i) => (
+          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', mt: 0.5 }}>
+              <IconButton size="small" onClick={() => { const arr = [...(c.outOfScope ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryField('en', 'outOfScope', arr); } }} disabled={i === 0} title="Move up">
+                <ArrowUpwardIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => { const arr = [...(c.outOfScope ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryField('en', 'outOfScope', arr); } }} disabled={i === (c.outOfScope?.length ?? 0) - 1} title="Move down">
+                <ArrowDownwardIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <EditableField value={v} onChange={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('en', 'outOfScope', arr); }} label={`${i + 1}`} multiline />
+            </Box>
+            <IconButton size="small" onClick={() => updateUserStoryField('en', 'outOfScope', (c.outOfScope ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        ))}
       </Box>
 
       <Dialog open={!!regenSection} onClose={() => setRegenSection(null)} maxWidth="sm" fullWidth>
@@ -335,13 +496,6 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
       <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="h5">User Story</Typography>
-          <TextField
-            value={item.title}
-            onChange={(e) => store.updateField('title', e.target.value)}
-            size="small"
-            placeholder="Story-Titel"
-            sx={{ maxWidth: 320, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
-          />
           {onDelete && (
             <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
               <DeleteIcon />

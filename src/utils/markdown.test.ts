@@ -9,13 +9,13 @@ describe('toMarkdown', () => {
       type: 'user-story-de',
       beschreibung: 'Als Patient möchte ich Termine online buchen.',
       akzeptanzkriterien: ['AC1: Testbar', 'AC2: Messbar'],
-      voraussetzungen: 'Login',
+      voraussetzungen: ['Login'],
       nutzerflows: {
         happyFlow: ['1. User klickt Buchung', '2. System zeigt Kalender'],
         fehlerszenario: ['1. User …', '2. System erkennt Fehler'],
       },
-      anhaenge: 'Design',
-      outOfScope: 'Nichts',
+      anhaenge: ['Design'],
+      outOfScope: ['Nichts'],
       jiraTicket: 'PROJ-123',
     };
     const md = toMarkdown(story);
@@ -24,6 +24,9 @@ describe('toMarkdown', () => {
     expect(md).toContain('AC1: Testbar');
     expect(md).toContain('### **🎫 Jira Ticket**');
     expect(md).toContain('PROJ-123');
+    expect(md).toContain('- Login');
+    expect(md).toContain('- Design');
+    expect(md).toContain('- Nichts');
   });
 
   it('formats Bug Report correctly', () => {
