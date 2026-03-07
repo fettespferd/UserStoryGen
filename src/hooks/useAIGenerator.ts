@@ -41,6 +41,7 @@ function getSystemPrompt(lang: 'de' | 'en', customPrompt?: string): string {
 
 const USER_STORY_DE_SCHEMA = `{
   "type": "user-story-de",
+  "title": "Kurzer, prägnanter Story-Titel (max. 60 Zeichen, z.B. 'Lebensphase in Einstellungen beenden')",
   "beschreibung": "Als [Rolle] möchte ich [Ziel], damit [Nutzen].",
   "akzeptanzkriterien": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "voraussetzungen": "...",
@@ -52,6 +53,7 @@ const USER_STORY_DE_SCHEMA = `{
 
 const USER_STORY_EN_SCHEMA = `{
   "type": "user-story-en",
+  "title": "Short, concise story title (max. 60 chars, e.g. 'End life phase in settings')",
   "description": "As a [role] I want [goal], so that [benefit].",
   "acceptanceCriteria": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "todos": { "be": [], "fe": [], "qa": [] },
@@ -89,6 +91,11 @@ export interface UseAIGeneratorReturn {
     prompt: string,
     settings: Settings | null
   ) => Promise<string | string[] | null>;
+  regenerateFullStory: (
+    item: UserStory,
+    prompt: string,
+    settings: Settings | null
+  ) => Promise<UserStory | null>;
   extractCopyBook: (
     images: string[],
     settings: Settings | null
@@ -120,7 +127,8 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       prompt: string,
       type: 'user-story-de' | 'user-story-en' | 'bug-de' | 'bug-en',
       settings: Settings,
-      images?: string[]
+      images?: string[],
+      options?: { promptPrefix?: string }
     ): Promise<UserStoryDE | UserStoryEN | BugReport | null> => {
       const lang = type.includes('de') ? 'de' : 'en';
       const systemPrompt = getSystemPrompt(lang, settings.customSystemPrompt);
@@ -128,9 +136,10 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       if (type === 'user-story-de') schema = USER_STORY_DE_SCHEMA;
       else if (type === 'user-story-en') schema = USER_STORY_EN_SCHEMA;
       else schema = BUG_SCHEMA;
+      const prefix = options?.promptPrefix ?? 'Erstelle basierend auf folgender Beschreibung:';
       const basePrompt = images?.length
         ? `Analysiere die angehängten Design-Bilder und erstelle basierend darauf sowie folgender Beschreibung:\n\n${prompt || '(Keine zusätzliche Beschreibung)'}`
-        : `Erstelle basierend auf folgender Beschreibung:\n\n${prompt}`;
+        : `${prefix}\n\n${prompt}`;
       const userPrompt = `${basePrompt}\n\nAntworte mit JSON im folgenden Schema (id wird automatisch gesetzt):\n${schema}`;
       const userContent = images?.length ? buildMessageContent(userPrompt, images) : userPrompt;
 
@@ -211,10 +220,15 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           const enResult = await generateSingle(prompt, 'user-story-en', settings, images) as UserStoryEN | null;
           if (!deResult || !enResult) return null;
           const id = generateId();
+          const title =
+            (deResult as { title?: string }).title?.trim() ||
+            (enResult as { title?: string }).title?.trim() ||
+            deResult.beschreibung?.slice(0, 60) ||
+            'User Story';
           const userStory: UserStory = {
             id,
             type: 'user-story',
-            title: deResult.beschreibung?.slice(0, 60) || 'User Story',
+            title,
             copyBook: [],
             images: images ?? [],
             de: {
@@ -244,6 +258,81 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           return { ...bugResult, images } as StoryItem;
         }
         return bugResult as StoryItem | null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [generateSingle]
+  );
+
+  const buildStoryContext = (item: UserStory): string => {
+    const d = item.de;
+    const e = item.en;
+    return `Aktueller Titel: ${item.title}
+
+Aktuelle Story (DE):
+Beschreibung: ${d.beschreibung}
+Akzeptanzkriterien: ${(d.akzeptanzkriterien ?? []).join(' | ')}
+Voraussetzungen: ${(d.voraussetzungen ?? []).join(' | ')}
+Happy Flow: ${(d.nutzerflows.happyFlow ?? []).join(' | ')}
+Fehlerszenario: ${(d.nutzerflows.fehlerszenario ?? []).join(' | ')}
+Anhänge: ${(d.anhaenge ?? []).join(' | ')}
+Out of Scope: ${(d.outOfScope ?? []).join(' | ')}
+Jira: ${d.jiraTicket}
+
+Aktuelle Story (EN):
+Description: ${e.description}
+Acceptance Criteria: ${(e.acceptanceCriteria ?? []).join(' | ')}
+Prerequisites: ${(e.prerequisites ?? []).join(' | ')}
+Happy Path: ${(e.userFlows.happyPath ?? []).join(' | ')}
+Error Scenario: ${(e.userFlows.errorScenario ?? []).join(' | ')}
+Resources: ${(e.resources ?? []).join(' | ')}
+Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
+  };
+
+  const regenerateFullStory = useCallback(
+    async (item: UserStory, prompt: string, settings: Settings | null): Promise<UserStory | null> => {
+      if (!settings?.apiKey || !prompt.trim()) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const context = buildStoryContext(item);
+        const updatePrompt = `Nimm folgende Anpassungen vor:\n\n${prompt}\n\n${context}`;
+        const opts = { promptPrefix: 'Aktualisiere diese bestehende User Story.' };
+        const deResult = (await generateSingle(updatePrompt, 'user-story-de', settings, undefined, opts)) as UserStoryDE | null;
+        const enResult = (await generateSingle(updatePrompt, 'user-story-en', settings, undefined, opts)) as UserStoryEN | null;
+        if (!deResult || !enResult) return null;
+        const newTitle =
+          (deResult as { title?: string }).title?.trim() ||
+          (enResult as { title?: string }).title?.trim() ||
+          item.title;
+        const updated: UserStory = {
+          ...item,
+          title: newTitle,
+          de: {
+            beschreibung: deResult.beschreibung,
+            akzeptanzkriterien: deResult.akzeptanzkriterien,
+            voraussetzungen: deResult.voraussetzungen,
+            nutzerflows: deResult.nutzerflows,
+            anhaenge: deResult.anhaenge,
+            outOfScope: deResult.outOfScope,
+            jiraTicket: deResult.jiraTicket,
+          },
+          en: {
+            description: enResult.description,
+            acceptanceCriteria: enResult.acceptanceCriteria,
+            todos: enResult.todos,
+            roles: enResult.roles,
+            prerequisites: enResult.prerequisites,
+            userFlows: enResult.userFlows,
+            resources: enResult.resources,
+            outOfScope: enResult.outOfScope,
+          },
+        };
+        return updated;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -387,7 +476,7 @@ Keine anderen Texte.`;
     []
   );
 
-  return { generate, regenerateSection, extractCopyBook, isLoading, error };
+  return { generate, regenerateSection, regenerateFullStory, extractCopyBook, isLoading, error };
 }
 
 function parseAIResponse(
@@ -408,6 +497,7 @@ function parseAIResponse(
     };
 
     if (type === 'user-story-de') {
+      const title = String(parsed.title ?? '').trim() || undefined;
       return {
         id,
         type: 'user-story-de',
@@ -425,10 +515,12 @@ function parseAIResponse(
         anhaenge: toStrArr(parsed.anhaenge),
         outOfScope: toStrArr(parsed.outOfScope),
         jiraTicket: String(parsed.jiraTicket ?? ''),
-      };
+        ...(title && { title }),
+      } as UserStoryDE;
     }
 
     if (type === 'user-story-en') {
+      const title = String(parsed.title ?? '').trim() || undefined;
       return {
         id,
         type: 'user-story-en',
@@ -447,7 +539,8 @@ function parseAIResponse(
         },
         resources: toStrArr(parsed.resources),
         outOfScope: toStrArr(parsed.outOfScope),
-      };
+        ...(title && { title }),
+      } as UserStoryEN;
     }
 
     return {

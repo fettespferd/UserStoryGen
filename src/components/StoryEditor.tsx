@@ -488,6 +488,19 @@ function StoryLangEditor({
 
 export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditorProps) {
   const [tab, setTab] = useState(0);
+  const [fullRegenOpen, setFullRegenOpen] = useState(false);
+  const [fullRegenPrompt, setFullRegenPrompt] = useState('');
+
+  const handleFullRegen = async () => {
+    if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
+    const updated = await ai.regenerateFullStory(item, fullRegenPrompt.trim(), settings);
+    if (updated) {
+      store.setCurrentItem(updated);
+      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
+      setFullRegenOpen(false);
+      setFullRegenPrompt('');
+    }
+  };
 
   if (!item) return null;
 
@@ -496,12 +509,52 @@ export function StoryEditor({ item, store, ai, settings, onDelete }: StoryEditor
       <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="h5">User Story</Typography>
-          {onDelete && (
-            <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
-              <DeleteIcon />
-            </IconButton>
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => setFullRegenOpen(true)}
+              disabled={!settings?.apiKey}
+            >
+              Alles mit KI anpassen
+            </Button>
+            <TextField
+              value={item.title}
+              onChange={(e) => store.updateField('title', e.target.value)}
+              size="small"
+              placeholder="Titel"
+              sx={{ maxWidth: 280, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
+            />
+            {onDelete && (
+              <IconButton onClick={() => onDelete(item.id)} color="error" title="Löschen">
+                <DeleteIcon />
+              </IconButton>
+            )}
+          </Box>
         </Box>
+
+        <Dialog open={fullRegenOpen} onClose={() => setFullRegenOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Alles mit KI anpassen</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              label="Anpassungswunsch / Prompt"
+              fullWidth
+              multiline
+              minRows={4}
+              value={fullRegenPrompt}
+              onChange={(e) => setFullRegenPrompt(e.target.value)}
+              placeholder="z.B.: Akzeptanzkriterien präzisieren, Fehlerszenario ergänzen, Beschreibung kürzer fassen..."
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setFullRegenOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleFullRegen} variant="contained" disabled={!fullRegenPrompt.trim() || ai.isLoading}>
+              {ai.isLoading ? 'Wird angepasst...' : 'Anpassen'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
           <Tab label="Deutsch" />
