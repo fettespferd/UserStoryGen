@@ -97,7 +97,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
 
   const handleExtractFromDesign = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files?.length || !settings?.apiKey) return;
+    if (!files?.length || !(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey)) return;
     const dataUrls: string[] = [];
     for (let i = 0; i < Math.min(files.length, 5); i++) {
       if (files[i].type.startsWith('image/')) {
@@ -115,7 +115,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
   };
 
   const handleExtractFromExistingImages = async () => {
-    if (!images.length || !settings?.apiKey) return;
+    if (!images.length || !(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey)) return;
     const extracted = await ai.extractCopyBook(images, settings);
     if (extracted?.length) {
       updateUserStoryCopyBook([...extracted, ...copyBook]);
@@ -183,7 +183,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                   )
                 }
                 onClick={() => extractInputRef.current?.click()}
-                disabled={!settings?.apiKey || ai.isLoading}
+                disabled={!(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey) || ai.isLoading}
               >
                 Aus Design extrahieren
               </Button>
@@ -204,7 +204,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                     )
                   }
                   onClick={handleExtractFromExistingImages}
-                  disabled={!settings?.apiKey || ai.isLoading}
+                  disabled={!(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey) || ai.isLoading}
                 >
                   Aus hochgeladenen Bildern extrahieren
                 </Button>
@@ -257,7 +257,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
         )}
       </Box>
 
-      {!settings?.apiKey && (
+      {!(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey) && (
         <Alert severity="info" sx={{ mb: 2 }}>
           API-Key in den Einstellungen für &quot;Aus Design extrahieren&quot; erforderlich.
         </Alert>

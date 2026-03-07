@@ -65,9 +65,10 @@ export function BugEditor({ item, store, ai, settings, onDelete, activeLangTab =
   const labels = lang === 'de' ? LABELS_DE : LABELS_EN;
   const content = lang === 'de' ? item?.de : item?.en;
 
+  const hasApiKey = Boolean(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey);
   const handleFullRegen = async () => {
-    if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
-    const updated = await ai.regenerateFullBugReport(item, fullRegenPrompt.trim(), settings);
+    if (!item || !fullRegenPrompt.trim() || !hasApiKey) return;
+    const updated = await ai.regenerateFullBugReport(item, fullRegenPrompt.trim(), settings ?? null);
     if (updated) {
       store.setCurrentItem(updated);
       store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
@@ -116,7 +117,7 @@ export function BugEditor({ item, store, ai, settings, onDelete, activeLangTab =
               size="small"
               startIcon={<AutoAwesomeIcon />}
               onClick={() => setFullRegenOpen(true)}
-              disabled={!settings?.apiKey}
+              disabled={!hasApiKey}
             >
               Alles mit KI anpassen
             </Button>

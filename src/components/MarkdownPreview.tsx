@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import type { StoryItem, Settings, MarkdownLinkTenant } from '../types/story';
+import type { StoryItem, Settings, MarkdownLinkTenant, ProjectType, MarkdownHeadingLevel, UserStory, BugReport } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
 
 interface MarkdownPreviewProps {
@@ -9,6 +9,13 @@ interface MarkdownPreviewProps {
   activeLang?: 'de' | 'en';
   settings?: Settings | null;
   onCopy?: () => void;
+}
+
+/** Tenant für Link basierend auf Story-Projekt: AOKN -> aokn, HealthMatch -> vitagroup */
+function projectToTenant(project?: ProjectType): MarkdownLinkTenant | null {
+  if (project === 'aokn') return 'aokn';
+  if (project === 'healthmatch') return 'vitagroup';
+  return null;
 }
 
 function getAccessibilityLink(
@@ -28,19 +35,36 @@ function getAccessibilityLink(
   return `[${label}](${url.trim()})`;
 }
 
+function getAccessibilitySectionTitle(lang: 'de' | 'en'): string {
+  return lang === 'de' ? 'Barrierefreiheit' : 'Accessibility';
+}
+
+function appendAccessibilitySection(md: string, headingLevel: MarkdownHeadingLevel, lang: 'de' | 'en', link: string | null): string {
+  const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
+  const title = getAccessibilitySectionTitle(lang);
+  md += `\n\n${h} **♿ ${title}**\n\n`;
+  if (link) md += link;
+  return md;
+}
+
 export function MarkdownPreview({ item, activeLang, settings, onCopy }: MarkdownPreviewProps) {
-  const headingLevel = settings?.markdownHeadingLevel ?? 'h3';
-  const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(settings?.markdownLinkTenant ?? 'none');
+  const headingLevel = (settings?.markdownHeadingLevel ?? 'h3') as MarkdownHeadingLevel;
   const lang = activeLang ?? 'de';
+  const project = item?.type === 'user-story' ? (item as UserStory).project : item?.type === 'bug-report' ? (item as BugReport).project : undefined;
+  const suggestedTenant = projectToTenant(project);
+  const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(() => suggestedTenant ?? settings?.markdownLinkTenant ?? 'none');
+
+  useEffect(() => {
+    if (suggestedTenant) {
+      setLinkTenant(suggestedTenant);
+    }
+  }, [suggestedTenant]);
 
   const handleCopy = useCallback(() => {
     if (!item) return;
     let md = toMarkdown(item, activeLang, { headingLevel });
     const link = getAccessibilityLink(linkTenant, settings, lang);
-    if (link) {
-      const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
-      md += `\n\n${h} **♿ Barrierefreiheit**\n\n${link}`;
-    }
+    md = appendAccessibilitySection(md, headingLevel, lang, link);
     navigator.clipboard.writeText(md);
     onCopy?.();
   }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy]);
@@ -49,10 +73,7 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
 
   let md = toMarkdown(item, activeLang, { headingLevel });
   const link = getAccessibilityLink(linkTenant, settings, lang);
-  if (link) {
-    const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
-    md += `\n\n${h} **♿ Barrierefreiheit**\n\n${link}`;
-  }
+  md = appendAccessibilitySection(md, headingLevel, lang, link);
   const title =
     item.type === 'user-story'
       ? (lang === 'en' ? (item.titleEN ?? item.title) : item.title)
@@ -101,8 +122,12 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
               onChange={(e) => setLinkTenant(e.target.value as MarkdownLinkTenant)}
             >
               <MenuItem value="none">Kein Link</MenuItem>
-              <MenuItem value="aokn">Accessibility Page (AOKN)</MenuItem>
-              <MenuItem value="vitagroup">Accessibility Page (Vitagroup)</MenuItem>
+              {(!suggestedTenant || suggestedTenant === 'aokn') && (
+                <MenuItem value="aokn">Accessibility Page (AOKN)</MenuItem>
+              )}
+              {(!suggestedTenant || suggestedTenant === 'vitagroup') && (
+                <MenuItem value="vitagroup">Accessibility Page (HealthMatch)</MenuItem>
+              )}
             </Select>
           </FormControl>
           {linkTenant !== 'none' && !link && (

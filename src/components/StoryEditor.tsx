@@ -46,8 +46,9 @@ function StoryLangEditor({
 
   const { updateUserStoryField, updateUserStoryArrayField, updateUserStoryNestedField } = store;
 
+  const hasApiKey = Boolean(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey);
   const handleRegenSection = async () => {
-    if (!regenSection || !settings?.apiKey) return;
+    if (!regenSection || !hasApiKey) return;
     const result = await ai.regenerateSection(lang, regenSection, regenPrompt, settings);
     if (result && item.type === 'user-story') {
       if (regenSection === 'links' && Array.isArray(result)) {
@@ -72,7 +73,7 @@ function StoryLangEditor({
       size="small"
       startIcon={<AutoAwesomeIcon />}
       onClick={() => setRegenSection(section)}
-      disabled={!settings?.apiKey}
+      disabled={!hasApiKey}
       sx={{ ml: 1 }}
     >
       Mit KI anpassen
@@ -441,9 +442,10 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
   const [fullRegenPrompt, setFullRegenPrompt] = useState('');
   const [linksRegenOpen, setLinksRegenOpen] = useState(false);
   const [linksRegenPrompt, setLinksRegenPrompt] = useState('');
+  const hasApiKey = Boolean(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey);
 
   const handleLinksRegen = async () => {
-    if (!settings?.apiKey || !linksRegenPrompt.trim()) return;
+    if (!hasApiKey || !linksRegenPrompt.trim()) return;
     const result = await ai.regenerateSection('de', 'links', linksRegenPrompt, settings);
     if (result && Array.isArray(result) && item?.type === 'user-story') {
       store.updateUserStoryLinks(result);
@@ -453,7 +455,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
   };
 
   const handleFullRegen = async () => {
-    if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
+    if (!item || !fullRegenPrompt.trim() || !hasApiKey) return;
     const updated = await ai.regenerateFullStory(item, fullRegenPrompt.trim(), settings);
     if (updated) {
       store.setCurrentItem(updated);
@@ -464,7 +466,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
   };
 
   const handleSyncDEToEN = async () => {
-    if (!item || !settings?.apiKey) return;
+    if (!item || !hasApiKey) return;
     const updated = await ai.syncDEToEN(item, settings);
     if (updated) {
       store.setCurrentItem(updated);
@@ -491,7 +493,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
               size="small"
               startIcon={<AutoAwesomeIcon />}
               onClick={() => setFullRegenOpen(true)}
-              disabled={!settings?.apiKey}
+              disabled={!hasApiKey}
             >
               Alles mit KI anpassen
             </Button>
@@ -536,7 +538,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
             variant="outlined"
             startIcon={ai.isLoading ? undefined : <TranslateIcon />}
             onClick={handleSyncDEToEN}
-            disabled={!settings?.apiKey || ai.isLoading}
+            disabled={!hasApiKey || ai.isLoading}
           >
             {ai.isLoading ? 'Wird übertragen…' : 'DE → EN übertragen'}
           </Button>
@@ -551,7 +553,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
             <Button size="small" startIcon={<AddIcon />} onClick={() => store.updateUserStoryLinks([...(item.links ?? []), ''])}>
               Hinzufügen
             </Button>
-            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setLinksRegenOpen(true)} disabled={!settings?.apiKey}>
+            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => setLinksRegenOpen(true)} disabled={!(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey)}>
               Mit KI anpassen
             </Button>
           </Typography>
