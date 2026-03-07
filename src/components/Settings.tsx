@@ -22,6 +22,8 @@ interface SettingsProps {
   settings: SettingsType | null;
   onSettingsChange: (settings: SettingsType) => void;
   onSettingsLoaded: (settings: SettingsType) => void;
+  /** Wird aufgerufen, wenn ein Ordner erfolgreich ausgewählt wurde. Erhält den Handle zum sofortigen Laden der Stories. */
+  onFolderSelected?: (handle: FileSystemDirectoryHandle) => void;
 }
 
 const defaultSettings: SettingsType = {
@@ -35,6 +37,7 @@ export function Settings({
   settings,
   onSettingsChange,
   onSettingsLoaded,
+  onFolderSelected,
 }: SettingsProps) {
   const [apiKey, setApiKey] = useState(settings?.apiKey ?? '');
   const [provider, setProvider] = useState<AIProvider>(settings?.provider ?? 'openai');
@@ -67,14 +70,15 @@ export function Settings({
   const handleFolderDialogConfirm = async (): Promise<boolean> => {
     setFolderDialogLoading(true);
     try {
-      const ok = await storage.requestFolderAccess();
-      if (ok && storage.hasAccess) {
+      const handle = await storage.requestFolderAccess();
+      if (handle) {
         const loaded = await storage.loadSettings();
         if (loaded) {
           onSettingsLoaded(loaded);
         } else {
           onSettingsLoaded({ ...defaultSettings });
         }
+        onFolderSelected?.(handle);
         return true;
       }
       return false;

@@ -24,9 +24,38 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   if (!item) return null;
 
   const md = toMarkdown(item, activeLang, { headingLevel });
+  const title = 'title' in item ? item.title : undefined;
+
+  const handleCopyTitle = useCallback(() => {
+    if (title) navigator.clipboard.writeText(title);
+  }, [title]);
 
   return (
     <Paper elevation={2} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
+      {title && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            Titel
+          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              p: 1.5,
+              bgcolor: 'action.hover',
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Typography sx={{ flex: 1, fontSize: '0.9rem' }}>{title}</Typography>
+            <Button size="small" startIcon={<ContentCopyIcon />} onClick={handleCopyTitle}>
+              Kopieren
+            </Button>
+          </Box>
+        </Box>
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Markdown (Jira/Confluence)</Typography>
         <Button

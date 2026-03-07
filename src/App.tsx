@@ -159,6 +159,9 @@ function App() {
               settings={settings}
               onSettingsChange={setSettings}
               onSettingsLoaded={setSettings}
+              onFolderSelected={(handle) => {
+                storage.loadStories(handle).then((items) => store.setItems(items));
+              }}
             />
           </Box>
         </Drawer>

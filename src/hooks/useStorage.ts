@@ -14,8 +14,8 @@ function isFileSystemAccessSupported(): boolean {
 export interface UseStorageReturn {
   hasAccess: boolean;
   isSupported: boolean;
-  requestFolderAccess: () => Promise<boolean>;
-  loadStories: () => Promise<StoryItem[]>;
+  requestFolderAccess: () => Promise<FileSystemDirectoryHandle | null>;
+  loadStories: (handle?: FileSystemDirectoryHandle) => Promise<StoryItem[]>;
   saveStory: (item: StoryItem) => Promise<void>;
   deleteStory: (item: StoryItem) => Promise<void>;
   loadSettings: () => Promise<Settings | null>;
@@ -39,8 +39,8 @@ export function useStorage(): UseStorageReturn {
     });
   }, [isSupported]);
 
-  const requestFolderAccess = useCallback(async (): Promise<boolean> => {
-    if (!isSupported) return false;
+  const requestFolderAccess = useCallback(async (): Promise<FileSystemDirectoryHandle | null> => {
+    if (!isSupported) return null;
     try {
       const handle = await window.showDirectoryPicker({
         mode: 'readwrite',
@@ -48,9 +48,9 @@ export function useStorage(): UseStorageReturn {
       setDirHandle(handle);
       setFolderName(handle.name);
       await saveDirHandle(handle);
-      return true;
+      return handle;
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return false;
+      if ((err as Error).name === 'AbortError') return null;
       throw err;
     }
   }, [isSupported]);
@@ -60,10 +60,11 @@ export function useStorage(): UseStorageReturn {
     return await dirHandle.getDirectoryHandle(STORIES_DIR, { create: true });
   }, [dirHandle]);
 
-  const loadStories = useCallback(async (): Promise<StoryItem[]> => {
-    if (!dirHandle) return [];
+  const loadStories = useCallback(async (handle?: FileSystemDirectoryHandle): Promise<StoryItem[]> => {
+    const h = handle ?? dirHandle;
+    if (!h) return [];
     try {
-      const storiesDir = await getOrCreateStoriesDir();
+      const storiesDir = await h.getDirectoryHandle(STORIES_DIR, { create: true });
       const stories: StoryItem[] = [];
       for await (const entry of storiesDir.values()) {
         if (entry.kind === 'file' && entry.name.endsWith('.json')) {
@@ -84,7 +85,7 @@ export function useStorage(): UseStorageReturn {
     } catch {
       return [];
     }
-  }, [dirHandle, getOrCreateStoriesDir]);
+  }, [dirHandle]);
 
   const saveStory = useCallback(
     async (item: StoryItem): Promise<void> => {
