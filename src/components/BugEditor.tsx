@@ -1,9 +1,8 @@
 import { useRef, useState } from 'react';
-import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import TranslateIcon from '@mui/icons-material/Translate';
 import { EditableField } from './EditableField';
 import { MarkdownPreview } from './MarkdownPreview';
 import type { BugReport, Settings } from '../types/story';
@@ -16,6 +15,8 @@ interface BugEditorProps {
   ai: UseAIGeneratorReturn;
   settings?: Settings | null;
   onDelete?: (id: string) => void;
+  activeLangTab?: number;
+  onActiveLangTabChange?: (tab: number) => void;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -27,11 +28,42 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProps) {
-  const { updateField, updateArrayField, updateBugReportImages } = store;
+const LABELS_DE = {
+  description: 'Beschreibung',
+  expectedResult: 'Erwartetes Ergebnis (SOLL)',
+  actualResult: 'Tatsächliches Ergebnis (IST)',
+  stepsToReproduce: 'Schritte zur Reproduktion',
+  technicalDetails: 'Technische Details',
+  severityPriority: 'Schweregrad / Priorität',
+  resources: 'Ressourcen',
+  outOfScope: 'Außerhalb des Scope',
+  step: 'Schritt',
+  screenshots: 'Screenshots / Bilder',
+  addImages: 'Bilder hinzufügen',
+};
+
+const LABELS_EN = {
+  description: 'Description',
+  expectedResult: 'Expected Result',
+  actualResult: 'Actual Result',
+  stepsToReproduce: 'Steps to Reproduce',
+  technicalDetails: 'Technical Details',
+  severityPriority: 'Severity / Priority',
+  resources: 'Resources',
+  outOfScope: 'Out of Scope',
+  step: 'Step',
+  screenshots: 'Screenshots / Images',
+  addImages: 'Add images',
+};
+
+export function BugEditor({ item, store, ai, settings, onDelete, activeLangTab = 0, onActiveLangTabChange }: BugEditorProps) {
+  const { updateBugReportField, updateBugReportArrayField, updateBugReportImages } = store;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fullRegenOpen, setFullRegenOpen] = useState(false);
   const [fullRegenPrompt, setFullRegenPrompt] = useState('');
+  const lang: 'de' | 'en' = activeLangTab === 1 ? 'en' : 'de';
+  const labels = lang === 'de' ? LABELS_DE : LABELS_EN;
+  const content = lang === 'de' ? item?.de : item?.en;
 
   const handleFullRegen = async () => {
     if (!item || !fullRegenPrompt.trim() || !settings?.apiKey) return;
@@ -44,45 +76,7 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
     }
   };
 
-  const handleTranslateTitle = async () => {
-    if (!item || !settings?.apiKey) return;
-    const updated = await ai.translateBugTitleToEN(item, settings);
-    if (updated) {
-      store.setCurrentItem(updated);
-      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
-    }
-  };
-
-  if (!item) return null;
-
-  const isDe = item.lang === 'de';
-  const labels = isDe
-    ? {
-        description: 'Beschreibung',
-        expectedResult: 'Erwartetes Ergebnis (SOLL)',
-        actualResult: 'Tatsächliches Ergebnis (IST)',
-        stepsToReproduce: 'Schritte zur Reproduktion',
-        technicalDetails: 'Technische Details',
-        severityPriority: 'Schweregrad / Priorität',
-        resources: 'Ressourcen',
-        outOfScope: 'Außerhalb des Scope',
-        step: 'Schritt',
-        screenshots: 'Screenshots / Bilder',
-        addImages: 'Bilder hinzufügen',
-      }
-    : {
-        description: 'Description',
-        expectedResult: 'Expected Result',
-        actualResult: 'Actual Result',
-        stepsToReproduce: 'Steps to Reproduce',
-        technicalDetails: 'Technical Details',
-        severityPriority: 'Severity / Priority',
-        resources: 'Resources',
-        outOfScope: 'Out of Scope',
-        step: 'Step',
-        screenshots: 'Screenshots / Images',
-        addImages: 'Add images',
-      };
+  if (!item || !content) return null;
 
   const images = item.images ?? [];
 
@@ -105,27 +99,19 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Paper elevation={2} sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h5">Bug Report ({item.lang === 'de' ? 'Deutsch' : 'English'})</Typography>
+          <Typography variant="h5">Bug Report</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+            <Tabs value={activeLangTab} onChange={(_, v) => onActiveLangTabChange?.(v)} sx={{ minHeight: 36, '& .MuiTab-root': { minHeight: 36, py: 0.5 } }}>
+              <Tab label="🇩🇪 Deutsch" />
+              <Tab label="🇬🇧 English" />
+            </Tabs>
             <TextField
-              value={item.title}
-              onChange={(e) => updateField('title', e.target.value)}
+              value={content.title}
+              onChange={(e) => updateBugReportField(lang, 'title', e.target.value)}
               size="small"
-              placeholder="Titel"
+              placeholder={lang === 'de' ? 'Titel' : 'Title'}
               sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
             />
-            {isDe && (
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={ai.isLoading ? undefined : <TranslateIcon />}
-                onClick={handleTranslateTitle}
-                disabled={!settings?.apiKey || ai.isLoading}
-                title="Titel ins Englische übersetzen"
-              >
-                {ai.isLoading ? '…' : 'Titel übersetzen'}
-              </Button>
-            )}
             <Button
               size="small"
               startIcon={<AutoAwesomeIcon />}
@@ -171,8 +157,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               📝 {labels.description}
             </Typography>
             <EditableField
-              value={item.description}
-              onChange={(v) => updateField('description', v)}
+              value={content.description}
+              onChange={(v) => updateBugReportField(lang, 'description', v)}
               multiline
               minRows={2}
             />
@@ -183,8 +169,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               ✅ {labels.expectedResult}
             </Typography>
             <EditableField
-              value={item.expectedResult}
-              onChange={(v) => updateField('expectedResult', v)}
+              value={content.expectedResult}
+              onChange={(v) => updateBugReportField(lang, 'expectedResult', v)}
               multiline
             />
           </Box>
@@ -194,8 +180,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               ❌ {labels.actualResult}
             </Typography>
             <EditableField
-              value={item.actualResult}
-              onChange={(v) => updateField('actualResult', v)}
+              value={content.actualResult}
+              onChange={(v) => updateBugReportField(lang, 'actualResult', v)}
               multiline
             />
           </Box>
@@ -204,11 +190,11 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
               🔁 {labels.stepsToReproduce}
             </Typography>
-            {item.stepsToReproduce.map((step, i) => (
+            {content.stepsToReproduce.map((step, i) => (
               <Box key={i} sx={{ mb: 1 }}>
                 <EditableField
                   value={step}
-                  onChange={(v) => updateArrayField('stepsToReproduce', i, v)}
+                  onChange={(v) => updateBugReportArrayField(lang, 'stepsToReproduce', i, v)}
                   label={`${labels.step} ${i + 1}`}
                   multiline
                 />
@@ -221,8 +207,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               🛠️ {labels.technicalDetails}
             </Typography>
             <EditableField
-              value={item.technicalDetails}
-              onChange={(v) => updateField('technicalDetails', v)}
+              value={content.technicalDetails}
+              onChange={(v) => updateBugReportField(lang, 'technicalDetails', v)}
               multiline
             />
           </Box>
@@ -232,8 +218,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               📊 {labels.severityPriority}
             </Typography>
             <EditableField
-              value={item.severityPriority}
-              onChange={(v) => updateField('severityPriority', v)}
+              value={content.severityPriority}
+              onChange={(v) => updateBugReportField(lang, 'severityPriority', v)}
               multiline
             />
           </Box>
@@ -243,8 +229,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               📚 {labels.resources}
             </Typography>
             <EditableField
-              value={item.resources}
-              onChange={(v) => updateField('resources', v)}
+              value={content.resources}
+              onChange={(v) => updateBugReportField(lang, 'resources', v)}
               multiline
             />
           </Box>
@@ -254,8 +240,8 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
               🚫 {labels.outOfScope}
             </Typography>
             <EditableField
-              value={item.outOfScope}
-              onChange={(v) => updateField('outOfScope', v)}
+              value={content.outOfScope}
+              onChange={(v) => updateBugReportField(lang, 'outOfScope', v)}
               multiline
             />
           </Box>
@@ -322,7 +308,7 @@ export function BugEditor({ item, store, ai, settings, onDelete }: BugEditorProp
         </Box>
       </Paper>
 
-      <MarkdownPreview item={item} settings={settings} />
+      <MarkdownPreview item={item} activeLang={lang} settings={settings} />
     </Box>
   );
 }

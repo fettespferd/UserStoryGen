@@ -33,18 +33,30 @@ describe('toMarkdown', () => {
     const bug: BugReport = {
       id: '2',
       type: 'bug-report',
-      lang: 'de',
-      title: 'Fehler beim Speichern',
-      description: 'Beschreibung',
-      expectedResult: 'Sollte speichern',
-      actualResult: 'Speichert nicht',
-      stepsToReproduce: ['1. Öffnen', '2. Klicken'],
-      technicalDetails: 'Chrome',
-      severityPriority: 'Hoch',
-      resources: 'Screenshot',
-      outOfScope: '-',
+      de: {
+        title: 'Fehler beim Speichern',
+        description: 'Beschreibung',
+        expectedResult: 'Sollte speichern',
+        actualResult: 'Speichert nicht',
+        stepsToReproduce: ['1. Öffnen', '2. Klicken'],
+        technicalDetails: 'Chrome',
+        severityPriority: 'Hoch',
+        resources: 'Screenshot',
+        outOfScope: '-',
+      },
+      en: {
+        title: 'Error when saving',
+        description: 'Description',
+        expectedResult: 'Should save',
+        actualResult: 'Does not save',
+        stepsToReproduce: ['1. Open', '2. Click'],
+        technicalDetails: 'Chrome',
+        severityPriority: 'High',
+        resources: 'Screenshot',
+        outOfScope: '-',
+      },
     };
-    const md = toMarkdown(bug);
+    const md = toMarkdown(bug, 'de');
     expect(md).toContain('🏷️ Titel');
     expect(md).toContain('Fehler beim Speichern');
     expect(md).toContain('✅ Erwartetes Ergebnis (SOLL)');

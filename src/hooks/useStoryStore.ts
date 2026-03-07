@@ -7,7 +7,7 @@ export interface UseStoryStoreReturn {
   items: StoryItem[];
   setCurrentItem: (item: StoryItem | null) => void;
   setItems: (items: StoryItem[]) => void;
-  createNew: (type: 'user-story' | 'bug-report', bugLang?: 'de' | 'en') => StoryItem;
+  createNew: (type: 'user-story' | 'bug-report') => StoryItem;
   updateField: (field: string, value: unknown) => void;
   updateArrayField: (field: string, index: number, value: string) => void;
   updateUserStoryField: (lang: 'de' | 'en', field: string, value: unknown) => void;
@@ -17,6 +17,8 @@ export interface UseStoryStoreReturn {
   updateUserStoryImages: (images: string[]) => void;
   updateUserStoryLinks: (links: string[]) => void;
   updateBugReportImages: (images: string[]) => void;
+  updateBugReportField: (lang: 'de' | 'en', field: string, value: unknown) => void;
+  updateBugReportArrayField: (lang: 'de' | 'en', field: string, index: number, value: string) => void;
   loadItem: (id: string) => void;
   deleteItem: (id: string) => void;
 }
@@ -26,9 +28,9 @@ export function useStoryStore(): UseStoryStoreReturn {
   const [items, setItems] = useState<StoryItem[]>([]);
 
   const createNew = useCallback(
-    (type: 'user-story' | 'bug-report', bugLang: 'de' | 'en' = 'de'): StoryItem => {
+    (type: 'user-story' | 'bug-report'): StoryItem => {
       const id = generateId();
-      const item: StoryItem = type === 'user-story' ? createUserStory(id) : createBugReport(id, bugLang);
+      const item: StoryItem = type === 'user-story' ? createUserStory(id) : createBugReport(id);
       setCurrentItem(item);
       setItems((prev) => [item, ...prev]);
       return item;
@@ -47,23 +49,50 @@ export function useStoryStore(): UseStoryStoreReturn {
     );
   }, [currentItem?.id]);
 
-  const updateArrayField = useCallback((_field: string, index: number, value: string) => {
-    const id = currentItem?.id ?? '';
-    setCurrentItem((prev) => {
-      if (!prev || prev.type !== 'bug-report') return prev;
-      const arr = [...prev.stepsToReproduce];
-      arr[index] = value;
-      return { ...prev, stepsToReproduce: arr };
-    });
-    setItems((prev) =>
-      prev.map((i) => {
-        if (i.id !== id || i.type !== 'bug-report') return i;
-        const arr = [...i.stepsToReproduce];
-        arr[index] = value;
-        return { ...i, stepsToReproduce: arr };
-      })
-    );
-  }, [currentItem?.id]);
+  const updateArrayField = useCallback((_field: string, _index: number, _value: string) => {
+    // Deprecated for BugReport – use updateBugReportArrayField
+  }, []);
+
+  const updateBugReportField = useCallback(
+    (lang: 'de' | 'en', field: string, value: unknown) => {
+      const id = currentItem?.id ?? '';
+      setCurrentItem((prev) => {
+        if (!prev || prev.type !== 'bug-report') return prev;
+        return { ...prev, [lang]: { ...prev[lang], [field]: value } };
+      });
+      setItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== id || i.type !== 'bug-report') return i;
+          return { ...i, [lang]: { ...i[lang], [field]: value } };
+        })
+      );
+    },
+    [currentItem?.id]
+  );
+
+  const updateBugReportArrayField = useCallback(
+    (lang: 'de' | 'en', field: string, index: number, value: string) => {
+      const id = currentItem?.id ?? '';
+      setCurrentItem((prev) => {
+        if (!prev || prev.type !== 'bug-report') return prev;
+        const arr = [...prev[lang][field as keyof typeof prev.de]];
+        if (Array.isArray(arr)) {
+          arr[index] = value;
+          return { ...prev, [lang]: { ...prev[lang], [field]: arr } };
+        }
+        return prev;
+      });
+      setItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== id || i.type !== 'bug-report') return i;
+          const arr = [...(i[lang][field as keyof typeof i.de] as string[])];
+          arr[index] = value;
+          return { ...i, [lang]: { ...i[lang], [field]: arr } };
+        })
+      );
+    },
+    [currentItem?.id]
+  );
 
   const updateUserStoryField = useCallback(
     (lang: 'de' | 'en', field: string, value: unknown) => {
@@ -191,6 +220,8 @@ export function useStoryStore(): UseStoryStoreReturn {
     updateUserStoryImages,
     updateUserStoryLinks,
     updateBugReportImages,
+    updateBugReportField,
+    updateBugReportArrayField,
     loadItem,
     deleteItem,
   };

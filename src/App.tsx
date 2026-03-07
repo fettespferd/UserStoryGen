@@ -24,9 +24,17 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Snackbar,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import SearchIcon from '@mui/icons-material/Search';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -41,6 +49,7 @@ import { Settings } from './components/Settings';
 import { AIGenerator } from './components/AIGenerator';
 
 import type { StoryItem, UserStory, BugReport, Settings as SettingsType, FontOption } from './types/story';
+import { formatDate } from './utils/format';
 
 import bgAnnie from '../assets/annie-spratt-QckxruozjRg-unsplash.jpg';
 import bgEmile from '../assets/emile-perron-xrVDYZRGdw4-unsplash.jpg';
@@ -68,6 +77,9 @@ const PLAIN_COLORS: Record<string, string> = {
   mint: '#e8f5e9',
   lavender: '#f3e5f5',
   peach: '#ffebe6',
+  coral: '#FF4757',
+  electric: '#00D4FF',
+  sunset: '#FF6B35',
 };
 
 const LIGHT_BACKGROUNDS = ['plain-light', 'plain-cream', 'plain-sky', 'plain-mint', 'plain-lavender', 'plain-peach'];
@@ -123,7 +135,12 @@ function App() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [currentView, setCurrentView] = useState<'main' | 'settings'>('main');
   const [storyLangTab, setStoryLangTab] = useState(0);
+  const [bugLangTab, setBugLangTab] = useState(0);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'date' | 'title'>('date');
+  const [filterType, setFilterType] = useState<'all' | 'user-story' | 'bug-report'>('all');
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'error' | 'success' }>({ open: false, message: '', severity: 'error' });
 
   useEffect(() => {
     storage.loadSettings().then((s) => s && setSettings(s));
@@ -145,7 +162,7 @@ function App() {
         try {
           await storage.saveStory(item);
         } catch (err) {
-          console.error('[UserStoryGen] Speichern fehlgeschlagen:', err);
+          setSnackbar({ open: true, message: 'Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
         }
       }
     },
@@ -155,7 +172,12 @@ function App() {
   const handleDelete = useCallback(async (id: string) => {
     const item = store.items.find((i) => i.id === id);
     if (item && storage.hasAccess) {
-      await storage.deleteStory(item);
+      try {
+        await storage.deleteStory(item);
+      } catch (err) {
+        setSnackbar({ open: true, message: 'Löschen fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
+        return;
+      }
     }
     store.deleteItem(id);
     setDeleteConfirmId(null);
@@ -170,7 +192,9 @@ function App() {
     if (!store.currentItem || !storage.hasAccess) return;
     const item = store.currentItem;
     const t = setTimeout(() => {
-      storage.saveStory(item).catch((err) => console.error('[UserStoryGen] Speichern fehlgeschlagen:', err));
+      storage.saveStory(item).catch((err) => {
+        setSnackbar({ open: true, message: 'Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
+      });
     }, 1000);
     return () => clearTimeout(t);
   }, [store.currentItem, storage.hasAccess, storage.saveStory]);
@@ -179,11 +203,48 @@ function App() {
   const isStory = currentItem?.type === 'user-story';
   const isBug = currentItem?.type === 'bug-report';
 
+  const filteredAndSortedItems = useMemo(() => {
+    let items = store.items;
+    if (filterType !== 'all') {
+      items = items.filter((i) => i.type === filterType);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      items = items.filter((item) => {
+        const title = item.type === 'user-story'
+          ? ((item as UserStory).title ?? '') + ' ' + ((item as UserStory).titleEN ?? '') + ' ' + ((item as UserStory).de?.beschreibung ?? '')
+          : ((item as BugReport).de?.title ?? '') + ' ' + ((item as BugReport).en?.title ?? '') + ' ' + ((item as BugReport).de?.description ?? '') + ' ' + ((item as BugReport).en?.description ?? '');
+        return title.toLowerCase().includes(q);
+      });
+    }
+    const sorted = [...items];
+    if (sortBy === 'title') {
+      sorted.sort((a, b) => {
+        const ta = a.type === 'user-story' ? (a as UserStory).title ?? '' : (a as BugReport).de?.title ?? (a as BugReport).en?.title ?? '';
+        const tb = b.type === 'user-story' ? (b as UserStory).title ?? '' : (b as BugReport).de?.title ?? (b as BugReport).en?.title ?? '';
+        return ta.localeCompare(tb);
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : parseInt(a.id.split('-')[0], 10) || 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : parseInt(b.id.split('-')[0], 10) || 0;
+        return dateB - dateA;
+      });
+    }
+    return sorted;
+  }, [store.items, filterType, searchQuery, sortBy]);
+
   const isLightMode = LIGHT_BACKGROUNDS.includes(settings?.background ?? '');
   const theme = useMemo(
     () => createAppTheme((settings?.font ?? 'source-sans-3') as FontOption, isLightMode),
     [settings?.font, settings?.background]
   );
+
+  const bg = settings?.background ?? 'plain-dark';
+  const bgPlainColor = bg.startsWith('plain-')
+    ? (PLAIN_COLORS[bg.replace('plain-', '')] ?? PLAIN_COLORS.dark)
+    : null;
+  const bgImageUrl = bg.startsWith('image-') ? BACKGROUND_IMAGES[bg.replace('image-', '')] : null;
 
   return (
     <ThemeProvider theme={theme}>
@@ -192,32 +253,25 @@ function App() {
         sx={{
           minHeight: '100vh',
           position: 'relative',
-          ...(function () {
-            const bg = settings?.background ?? 'plain-dark';
-            if (bg.startsWith('plain-')) {
-              const color = PLAIN_COLORS[bg.replace('plain-', '')] ?? PLAIN_COLORS.dark;
-              return { bgcolor: color };
-            }
-            const imgKey = bg.replace('image-', '');
-            const imgUrl = BACKGROUND_IMAGES[imgKey];
-            if (imgUrl) {
-              return {
-                '&::before': {
-                  content: '""',
-                  position: 'fixed',
-                  inset: 0,
-                  backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.92) 0%, rgba(20,18,16,0.85) 50%, rgba(20,18,16,0.95) 100%), url(${imgUrl})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  pointerEvents: 'none',
-                  zIndex: 0,
-                },
-              };
-            }
-            return { bgcolor: PLAIN_COLORS.dark };
-          })(),
+          bgcolor: bgPlainColor ?? PLAIN_COLORS.dark,
         }}
       >
+        {bgImageUrl && (
+          <Box
+            component="div"
+            aria-hidden
+            sx={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 0,
+              pointerEvents: 'none',
+              backgroundImage: `linear-gradient(180deg, rgba(20,18,16,0.92) 0%, rgba(20,18,16,0.85) 50%, rgba(20,18,16,0.95) 100%), url(${bgImageUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+        )}
+        <Box sx={{ position: 'relative', zIndex: 1, isolation: 'isolate' }}>
         <AppBar
           position="static"
           color="transparent"
@@ -256,7 +310,7 @@ function App() {
             >
               <DescriptionIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
               <Typography variant="h6" component="span">
-                UserStoryGen
+                User Story Generator
               </Typography>
             </Box>
             <Box sx={{ flexGrow: 1 }} />
@@ -283,6 +337,8 @@ function App() {
               onFolderSelected={(handle) => {
                 storage.loadStories(handle).then((items) => store.setItems(items));
               }}
+              onStorageError={(msg) => setSnackbar({ open: true, message: msg, severity: 'error' })}
+              ai={ai}
             />
           </Container>
         ) : (
@@ -331,16 +387,16 @@ function App() {
                         {isStory ? 'User Story' : 'Bug Report'}
                       </Typography>
                     </Box>
-                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2 }} noWrap title={currentItem.type === 'user-story' ? ((currentItem as UserStory).titleEN ?? (currentItem as UserStory).title) : (currentItem as BugReport).title}>
+                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 2 }} noWrap title={currentItem.type === 'user-story' ? ((currentItem as UserStory).titleEN ?? (currentItem as UserStory).title) : ((currentItem as BugReport).de?.title ?? (currentItem as BugReport).en?.title)}>
                       {currentItem.type === 'user-story'
                         ? (storyLangTab === 1 ? (currentItem as UserStory).titleEN ?? (currentItem as UserStory).title : (currentItem as UserStory).title) || 'Ohne Titel'
-                        : (currentItem as BugReport).title || 'Ohne Titel'}
+                        : (bugLangTab === 1 ? (currentItem as BugReport).en?.title : (currentItem as BugReport).de?.title) ?? (currentItem as BugReport).en?.title ?? (currentItem as BugReport).de?.title ?? 'Ohne Titel'}
                     </Typography>
-                    {isStory && (
+                    {(isStory || isBug) && (
                       <ToggleButtonGroup
-                        value={storyLangTab}
+                        value={isStory ? storyLangTab : bugLangTab}
                         exclusive
-                        onChange={(_, v) => v !== null && setStoryLangTab(v)}
+                        onChange={(_, v) => v !== null && (isStory ? setStoryLangTab(v) : setBugLangTab(v))}
                         fullWidth
                         size="small"
                         sx={{
@@ -362,13 +418,13 @@ function App() {
                         Wechseln zu
                       </Typography>
                       <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
-                        {store.items
+                        {filteredAndSortedItems
                           .filter((i) => i.id !== currentItem.id)
                           .slice(0, 8)
                           .map((item) => {
                             const isBug = item.type === 'bug-report';
                             const title = isBug
-                              ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
+                              ? (item as BugReport).de?.title ?? (item as BugReport).en?.title ?? `Bug ${item.id.slice(-7)}`
                               : (item as UserStory).title || `Story ${item.id.slice(-7)}`;
                             const TypeIcon = isBug ? BugReportIcon : DescriptionIcon;
                             return (
@@ -393,13 +449,14 @@ function App() {
                                   onClick={() => {
                                     store.loadItem(item.id);
                                     setStoryLangTab(0);
+                                    setBugLangTab(0);
                                   }}
                                   sx={{ py: 1, gap: 1.5 }}
                                 >
                                   <TypeIcon sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0 }} />
                                   <ListItemText
                                     primary={title}
-                                    secondary={isBug ? `Bug ${(item as BugReport).lang}` : 'User Story'}
+                                    secondary={`${isBug ? 'Bug Report' : 'User Story'} • ${formatDate(item.createdAt, item.id)}`}
                                     primaryTypographyProps={{ variant: 'body2', noWrap: true, fontWeight: 500 }}
                                     secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
                                   />
@@ -437,6 +494,8 @@ function App() {
                       ai={ai}
                       settings={settings}
                       onDelete={handleDelete}
+                      activeLangTab={bugLangTab}
+                      onActiveLangTabChange={setBugLangTab}
                     />
                   )}
                 </>
@@ -450,14 +509,47 @@ function App() {
                   overflow: 'hidden',
                 }}
                 >
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, pt: 2, pb: 1, fontWeight: 600 }}>
-                    Gespeicherte Stories
-                  </Typography>
+                  <Box sx={{ px: 2, pt: 2, pb: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                      Gespeicherte Stories
+                    </Typography>
+                    <TextField
+                      size="small"
+                      placeholder="Suchen..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{ maxWidth: 280 }}
+                    />
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                      <FormControl size="small" sx={{ minWidth: 100 }}>
+                        <InputLabel>Filter</InputLabel>
+                        <Select value={filterType} label="Filter" onChange={(e) => setFilterType(e.target.value as typeof filterType)}>
+                          <MenuItem value="all">Alle</MenuItem>
+                          <MenuItem value="user-story">User Stories</MenuItem>
+                          <MenuItem value="bug-report">Bug Reports</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl size="small" sx={{ minWidth: 100 }}>
+                        <InputLabel>Sortierung</InputLabel>
+                        <Select value={sortBy} label="Sortierung" onChange={(e) => setSortBy(e.target.value as typeof sortBy)}>
+                          <MenuItem value="date">Neueste zuerst</MenuItem>
+                          <MenuItem value="title">Titel A–Z</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  </Box>
                   <List dense disablePadding sx={{ pb: 2 }}>
-                    {store.items.map((item) => {
+                    {filteredAndSortedItems.map((item) => {
                       const isBug = item.type === 'bug-report';
                       const title = isBug
-                        ? (item as BugReport).title || `Bug ${item.id.slice(-7)}`
+                        ? (item as BugReport).de?.title ?? (item as BugReport).en?.title ?? `Bug ${item.id.slice(-7)}`
                         : (item as UserStory).title || `Story ${item.id.slice(-7)}`;
                       const TypeIcon = isBug ? BugReportIcon : DescriptionIcon;
                       return (
@@ -482,13 +574,14 @@ function App() {
                             onClick={() => {
                               store.loadItem(item.id);
                               setStoryLangTab(0);
+                              setBugLangTab(0);
                             }}
                             sx={{ py: 1.5, gap: 1.5 }}
                           >
                             <TypeIcon sx={{ fontSize: 22, color: 'text.secondary', flexShrink: 0 }} />
                             <ListItemText
                               primary={title}
-                              secondary={isBug ? `Bug ${(item as BugReport).lang}` : 'User Story'}
+                              secondary={`${isBug ? 'Bug Report' : 'User Story'} • ${formatDate(item.createdAt, item.id)}`}
                               primaryTypographyProps={{ variant: 'body1', fontWeight: 500, noWrap: true }}
                               secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
                             />
@@ -522,7 +615,19 @@ function App() {
           </Box>
         </Container>
         )}
+        </Box>
       </Box>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
         <DialogTitle>Story löschen?</DialogTitle>

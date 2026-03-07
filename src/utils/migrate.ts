@@ -1,4 +1,4 @@
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, UserStoryENContent } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, UserStoryENContent } from '../types/story';
 
 function toStrArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String).filter(Boolean);
@@ -40,8 +40,35 @@ export function migrateItem(raw: unknown): StoryItem | null {
   const obj = raw as Record<string, unknown>;
 
   if (obj.type === 'bug-report') {
-    const bug = raw as BugReport;
-    return { ...bug, images: bug.images ?? [] };
+    const bug = raw as Record<string, unknown>;
+    if (bug.de && bug.en) {
+      return { ...bug, images: bug.images ?? [] } as BugReport;
+    }
+    const content: BugReportContent = {
+      title: String(bug.title ?? ''),
+      description: String(bug.description ?? ''),
+      expectedResult: String(bug.expectedResult ?? ''),
+      actualResult: String(bug.actualResult ?? ''),
+      stepsToReproduce: Array.isArray(bug.stepsToReproduce) ? bug.stepsToReproduce.map(String) : [],
+      technicalDetails: String(bug.technicalDetails ?? ''),
+      severityPriority: String(bug.severityPriority ?? ''),
+      resources: String(bug.resources ?? ''),
+      outOfScope: String(bug.outOfScope ?? ''),
+    };
+    const lang = bug.lang === 'en' ? 'en' : 'de';
+    const emptyContent: BugReportContent = {
+      title: '', description: '', expectedResult: '', actualResult: '',
+      stepsToReproduce: ['', '', ''], technicalDetails: '', severityPriority: '', resources: '', outOfScope: '',
+    };
+    return {
+      id: String(bug.id),
+      type: 'bug-report',
+      createdAt: bug.createdAt as string | undefined,
+      project: bug.project as BugReport['project'],
+      images: (bug.images as string[]) ?? [],
+      de: lang === 'de' ? content : emptyContent,
+      en: lang === 'en' ? content : emptyContent,
+    } as BugReport;
   }
 
   if (obj.type === 'user-story') {

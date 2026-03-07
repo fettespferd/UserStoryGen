@@ -18,12 +18,18 @@ import {
   DialogActions,
   FormControlLabel,
   Switch,
+  IconButton,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel, BackgroundOption, FontOption, ProjectType } from '../types/story';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import type { Settings as SettingsType, AIProvider, OpenAIModel, AnthropicModel, BackgroundOption, FontOption, ProjectType, PromptTemplate } from '../types/story';
 import type { UseStorageReturn } from '../hooks/useStorage';
+import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { FolderAccessDialog } from './FolderAccessDialog';
 import { getDefaultSystemPrompt } from '../hooks/useAIGenerator';
+import { generateId } from '../utils/templates';
 import bgAnnie from '../../assets/annie-spratt-QckxruozjRg-unsplash.jpg';
 import bgEmile from '../../assets/emile-perron-xrVDYZRGdw4-unsplash.jpg';
 import bgHoward from '../../assets/howard-bouchevereau-RSCirJ70NDM-unsplash.jpg';
@@ -45,6 +51,9 @@ interface SettingsProps {
   onSettingsLoaded: (settings: SettingsType) => void;
   /** Wird aufgerufen, wenn ein Ordner erfolgreich ausgewählt wurde. Erhält den Handle zum sofortigen Laden der Stories. */
   onFolderSelected?: (handle: FileSystemDirectoryHandle) => void;
+  /** Wird bei Speicherfehlern aufgerufen. */
+  onStorageError?: (message: string) => void;
+  ai?: UseAIGeneratorReturn | null;
 }
 
 const defaultSettings: SettingsType = {
@@ -59,6 +68,8 @@ export function Settings({
   onSettingsChange,
   onSettingsLoaded,
   onFolderSelected,
+  onStorageError,
+  ai,
 }: SettingsProps) {
   const [apiKeyOpenAI, setApiKeyOpenAI] = useState(settings?.apiKeyOpenAI ?? settings?.apiKey ?? '');
   const [apiKeyAnthropic, setApiKeyAnthropic] = useState(settings?.apiKeyAnthropic ?? '');
@@ -81,10 +92,13 @@ export function Settings({
   const [font, setFont] = useState<FontOption>(settings?.font ?? 'source-sans-3');
   const [defaultProject, setDefaultProject] = useState<ProjectType>(settings?.defaultProject ?? 'aokn');
   const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false);
   const [resetPromptLang, setResetPromptLang] = useState<'de' | 'en' | null>(null);
+  const [generateForId, setGenerateForId] = useState<string | null>(null);
+  const [generateDescription, setGenerateDescription] = useState('');
 
   useEffect(() => {
     if (settings) {
@@ -100,13 +114,14 @@ export function Settings({
       setAoknAccessibilityUrl(settings.tenantLinks?.aokn?.accessibilityPage ?? '');
       setVitagroupAccessibilityUrl(settings.tenantLinks?.vitagroup?.accessibilityPage ?? '');
       const bg = settings.background ?? 'plain-dark';
-      const validBg = ['plain-dark','plain-navy','plain-forest','plain-burgundy','plain-slate','plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach','image-annie','image-emile','image-howard','image-kari','image-nubelson'].includes(bg)
+      const validBg = ['plain-dark','plain-navy','plain-forest','plain-burgundy','plain-slate','plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach','plain-coral','plain-electric','plain-sunset','image-annie','image-emile','image-howard','image-kari','image-nubelson'].includes(bg)
         ? bg
         : 'plain-dark';
       setBackground(validBg);
       setFont(settings.font ?? 'source-sans-3');
       setDefaultProject(settings.defaultProject ?? 'aokn');
       setShowProjectOption(settings.showProjectOption ?? true);
+      setPromptTemplates(settings.promptTemplates ?? []);
     }
   }, [settings]);
 
@@ -155,13 +170,14 @@ export function Settings({
       font,
       defaultProject,
       showProjectOption,
+      promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
     };
     onSettingsChange(next);
     if (storage.hasAccess) {
       try {
         await storage.saveSettings(next);
       } catch (err) {
-        console.error('Failed to save settings', err);
+        onStorageError?.('Einstellungen speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
       }
     }
   };
@@ -315,30 +331,35 @@ export function Settings({
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
             Farbe oder Bild für die Hauptansicht.
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {(['plain-dark', 'plain-navy', 'plain-forest', 'plain-burgundy', 'plain-slate', 'plain-light', 'plain-cream', 'plain-sky', 'plain-mint', 'plain-lavender', 'plain-peach'] as const).map((opt) => (
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+            }}
+          >
+            {(['plain-dark', 'plain-navy', 'plain-forest', 'plain-light', 'plain-cream', 'plain-sky', 'plain-coral', 'plain-electric', 'plain-sunset'] as const).map((opt) => (
               <Box
                 key={opt}
                 onClick={() => setBackground(opt)}
                 sx={{
                   width: 48,
                   height: 48,
+                  flexShrink: 0,
                   borderRadius: 1,
                   bgcolor: {
                     'plain-dark': '#1a1a1a',
                     'plain-navy': '#0f172a',
                     'plain-forest': '#0f1f12',
-                    'plain-burgundy': '#1a0f12',
-                    'plain-slate': '#1e293b',
                     'plain-light': '#f0f0f0',
                     'plain-cream': '#fef5e7',
                     'plain-sky': '#e3f2fd',
-                    'plain-mint': '#e8f5e9',
-                    'plain-lavender': '#f3e5f5',
-                    'plain-peach': '#ffebe6',
+                    'plain-coral': '#FF4757',
+                    'plain-electric': '#00D4FF',
+                    'plain-sunset': '#FF6B35',
                   }[opt],
                   border: '2px solid',
-                  borderColor: background === opt ? 'primary.main' : ['plain-light','plain-cream','plain-sky','plain-mint','plain-lavender','plain-peach'].includes(opt) ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
+                  borderColor: background === opt ? 'primary.main' : ['plain-light','plain-cream','plain-sky'].includes(opt) ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
                   cursor: 'pointer',
                   '&:hover': { opacity: 0.9 },
                 }}
@@ -346,14 +367,12 @@ export function Settings({
                   'plain-dark': 'Dunkel',
                   'plain-navy': 'Navy',
                   'plain-forest': 'Wald',
-                  'plain-burgundy': 'Bordeaux',
-                  'plain-slate': 'Schiefer',
                   'plain-light': 'Hell',
                   'plain-cream': 'Creme',
                   'plain-sky': 'Himmel',
-                  'plain-mint': 'Minze',
-                  'plain-lavender': 'Lavendel',
-                  'plain-peach': 'Pfirsich',
+                  'plain-coral': 'Koralle',
+                  'plain-electric': 'Elektrisch',
+                  'plain-sunset': 'Sonnenuntergang',
                 }[opt]}
               />
             ))}
@@ -367,6 +386,7 @@ export function Settings({
                 sx={{
                   width: 48,
                   height: 48,
+                  flexShrink: 0,
                   borderRadius: 1,
                   objectFit: 'cover',
                   border: '2px solid',
@@ -452,6 +472,119 @@ export function Settings({
             label="Projekt-Auswahl bei neuer Story anzeigen"
           />
         </Box>
+
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Prompt-Vorlagen (benutzerdefiniert)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Eigene Vorlagen für das KI-Eingabefeld. Name und Inhalt bearbeiten. Mit KI generieren erstellt den Inhalt aus einer kurzen Beschreibung.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {promptTemplates.map((t) => (
+              <Paper
+                key={t.id}
+                variant="outlined"
+                sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1.5 }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                  <TextField
+                    size="small"
+                    value={t.name}
+                    onChange={(e) =>
+                      setPromptTemplates((prev) =>
+                        prev.map((x) => (x.id === t.id ? { ...x, name: e.target.value } : x))
+                      )
+                    }
+                    placeholder="Vorlagenname (z.B. Feature-Request)"
+                    sx={{ flex: 1, maxWidth: 280 }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={ai?.isLoading && generateForId === t.id ? undefined : <AutoAwesomeIcon />}
+                    onClick={() => {
+                      setGenerateForId(t.id);
+                      setGenerateDescription('');
+                    }}
+                    disabled={!ai || !settings?.apiKeyOpenAI && !settings?.apiKeyAnthropic && !settings?.apiKey}
+                  >
+                    {ai?.isLoading && generateForId === t.id ? '…' : 'Mit KI generieren'}
+                  </Button>
+                  <IconButton size="small" color="error" onClick={() => setPromptTemplates((prev) => prev.filter((x) => x.id !== t.id))} title="Vorlage löschen">
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <TextField
+                  size="small"
+                  value={t.prompt}
+                  onChange={(e) =>
+                    setPromptTemplates((prev) =>
+                      prev.map((x) => (x.id === t.id ? { ...x, prompt: e.target.value } : x))
+                    )
+                  }
+                  placeholder="Inhalt der Vorlage (wird ins Beschreibungsfeld eingefügt)..."
+                  multiline
+                  minRows={3}
+                  fullWidth
+                  sx={{ '& .MuiInputBase-root': { bgcolor: 'background.paper' } }}
+                />
+              </Paper>
+            ))}
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() =>
+                setPromptTemplates((prev) => [
+                  ...prev,
+                  { id: generateId(), name: 'Neue Vorlage', prompt: '' },
+                ])
+              }
+            >
+              Vorlage hinzufügen
+            </Button>
+          </Box>
+        </Box>
+
+        <Dialog open={!!generateForId} onClose={() => setGenerateForId(null)} maxWidth="sm" fullWidth>
+          <DialogTitle>Inhalt mit KI generieren</DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              Kurz beschreiben, welche Art von Vorlage gewünscht ist (z.B. „Feature-Request für externe Partner“ oder „Technische Anforderung für API-Integration“).
+            </DialogContentText>
+            <TextField
+              autoFocus
+              label="Beschreibung"
+              fullWidth
+              multiline
+              minRows={3}
+              value={generateDescription}
+              onChange={(e) => setGenerateDescription(e.target.value)}
+              placeholder="z.B.: Vorlage für Feature-Requests an externe Systempartner mit Platzhaltern für Kontext, Ziel und Abhängigkeiten"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setGenerateForId(null)}>Abbrechen</Button>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                if (!generateForId || !ai || !settings) return;
+                const generated = await ai.generatePromptFromDescription(generateDescription.trim() || 'Allgemeine User-Story-Vorlage', settings);
+                if (generated) {
+                  setPromptTemplates((prev) =>
+                    prev.map((x) => (x.id === generateForId ? { ...x, prompt: generated } : x))
+                  );
+                }
+                setGenerateForId(null);
+                setGenerateDescription('');
+              }}
+              disabled={ai?.isLoading}
+            >
+              {ai?.isLoading ? 'Wird generiert…' : 'Generieren'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>

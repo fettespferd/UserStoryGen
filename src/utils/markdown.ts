@@ -28,7 +28,7 @@ export function toMarkdown(
   options?: MarkdownOptions
 ): string {
   const h = options?.headingLevel ?? 'h3';
-  if (item.type === 'bug-report') return bugReportToMarkdown(item, h);
+  if (item.type === 'bug-report') return bugReportToMarkdown(item, activeLang ?? 'de', h);
   if (item.type === 'user-story') {
     const lang = activeLang ?? 'de';
     return lang === 'de' ? userStoryDEToMarkdown(item.de, h, item.links) : userStoryENToMarkdown(item.en, h, item.links);
@@ -65,45 +65,46 @@ const BUG_LABELS_EN = {
   outOfScope: 'Out of Scope',
 };
 
-function bugReportToMarkdown(bug: BugReport, h: MarkdownHeadingLevel): string {
-  const labels = bug.lang === 'de' ? BUG_LABELS_DE : BUG_LABELS_EN;
+function bugReportToMarkdown(bug: BugReport, activeLang: 'de' | 'en', h: MarkdownHeadingLevel): string {
+  const labels = activeLang === 'de' ? BUG_LABELS_DE : BUG_LABELS_EN;
+  const c = activeLang === 'de' ? bug.de : bug.en;
   const lines: string[] = [];
 
   lines.push(heading(h, `🏷️ ${labels.title}`));
   lines.push('');
-  lines.push(bug.title);
+  lines.push(c.title);
   lines.push('');
   lines.push(heading(h, `📝 ${labels.description}`));
   lines.push('');
-  lines.push(bug.description);
+  lines.push(c.description);
   lines.push('');
   lines.push(heading(h, `✅ ${labels.expectedResult}`));
   lines.push('');
-  lines.push(bug.expectedResult);
+  lines.push(c.expectedResult);
   lines.push('');
   lines.push(heading(h, `❌ ${labels.actualResult}`));
   lines.push('');
-  lines.push(bug.actualResult);
+  lines.push(c.actualResult);
   lines.push('');
   lines.push(heading(h, `🔁 ${labels.stepsToReproduce}`));
   lines.push('');
-  bug.stepsToReproduce.forEach((step) => lines.push(step));
+  (c.stepsToReproduce ?? []).forEach((step) => lines.push(step));
   lines.push('');
   lines.push(heading(h, `🛠️ ${labels.technicalDetails}`));
   lines.push('');
-  lines.push(bug.technicalDetails);
+  lines.push(c.technicalDetails);
   lines.push('');
   lines.push(heading(h, `📊 ${labels.severityPriority}`));
   lines.push('');
-  lines.push(bug.severityPriority);
+  lines.push(c.severityPriority);
   lines.push('');
   lines.push(heading(h, `📚 ${labels.resources}`));
   lines.push('');
-  lines.push(bug.resources);
+  lines.push(c.resources);
   lines.push('');
   lines.push(heading(h, `🚫 ${labels.outOfScope}`));
   lines.push('');
-  lines.push(bug.outOfScope);
+  lines.push(c.outOfScope);
 
   return lines.join('\n');
 }

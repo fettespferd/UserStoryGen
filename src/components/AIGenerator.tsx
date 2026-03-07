@@ -10,13 +10,18 @@ import {
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { TicketTypeChoice } from './TicketTypeSelector';
-import type { Settings, StoryItem, ProjectType } from '../types/story';
+import ClearIcon from '@mui/icons-material/Clear';
+import type { Settings, StoryItem, ProjectType, TicketTypeChoice } from '../types/story';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
+import { getPromptTemplates } from '../utils/templates';
 
 interface AIGeneratorProps {
   ai: UseAIGeneratorReturn;
@@ -40,23 +45,50 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const [project, setProject] = useState<ProjectType>(defaultProject);
   const [prompt, setPrompt] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProject(defaultProject);
   }, [defaultProject]);
 
+  const processFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
+    if (!imageFiles.length) return;
+    const dataUrls: string[] = [];
+    for (let i = 0; i < Math.min(imageFiles.length, 5 - images.length); i++) {
+      dataUrls.push(await fileToDataUrl(imageFiles[i]));
+    }
+    setImages((prev) => [...prev, ...dataUrls].slice(0, 5));
+  };
+
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
-    const dataUrls: string[] = [];
-    for (let i = 0; i < Math.min(files.length, 5); i++) {
-      if (files[i].type.startsWith('image/')) {
-        dataUrls.push(await fileToDataUrl(files[i]));
-      }
-    }
-    setImages((prev) => [...prev, ...dataUrls].slice(0, 5));
+    await processFiles(files);
     e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (images.length < 5) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (!files?.length || images.length >= 5) return;
+    await processFiles(files);
   };
 
   const removeImage = (index: number) => {
@@ -82,6 +114,13 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
     settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey
   );
   const canGenerate = hasApiKey && prompt.trim().length > 0;
+  const promptTemplates = getPromptTemplates(settings?.promptTemplates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  useEffect(() => {
+    const valid = promptTemplates.some((t) => t.id === selectedTemplateId);
+    if (!valid && promptTemplates[0]) setSelectedTemplateId(promptTemplates[0].id);
+  }, [promptTemplates, selectedTemplateId]);
 
   return (
     <Paper
@@ -124,7 +163,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           }}
         >
           <ToggleButton value="user-story">User Story</ToggleButton>
-          <ToggleButton value="bug-de">Bug Report</ToggleButton>
+          <ToggleButton value="bug">Bug Report</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
@@ -153,7 +192,20 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         </Box>
       )}
 
-      <Box sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          mb: 2,
+          p: 2,
+          borderRadius: 2,
+          border: '2px dashed',
+          borderColor: isDragging ? 'primary.main' : 'divider',
+          bgcolor: isDragging ? 'action.selected' : 'transparent',
+          transition: 'border-color 0.2s, background-color 0.2s',
+        }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           Design-Bilder (optional)
         </Typography>
@@ -172,7 +224,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           onClick={() => fileInputRef.current?.click()}
           disabled={images.length >= 5}
         >
-          Bilder hochladen
+          Bilder hochladen {images.length < 5 && 'oder hier ablegen'}
         </Button>
         {images.length > 0 && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -212,6 +264,52 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
             ))}
           </Box>
         )}
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            Vorlage für KI-Prompt
+          </Typography>
+          {prompt.trim() && (
+            <Button
+              size="small"
+              startIcon={<ClearIcon />}
+              onClick={() => setPrompt('')}
+              sx={{ minWidth: 'auto', px: 1, color: 'text.secondary' }}
+            >
+              Leeren
+            </Button>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', minWidth: 0 }}>
+          <FormControl size="small" sx={{ width: 240, flexShrink: 0 }}>
+            <InputLabel>Vorlage</InputLabel>
+            <Select
+              value={selectedTemplateId || promptTemplates[0]?.id || ''}
+              label="Vorlage"
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              sx={{ '& .MuiSelect-select': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+            >
+              {promptTemplates.map((t) => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.nameLong || t.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => {
+              const t = promptTemplates.find((x) => x.id === (selectedTemplateId || promptTemplates[0]?.id));
+              if (t) setPrompt(t.prompt);
+            }}
+            disabled={ai.isLoading || !promptTemplates.length}
+          >
+            Einfügen
+          </Button>
+        </Box>
       </Box>
 
       <TextField

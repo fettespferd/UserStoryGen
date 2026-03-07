@@ -56,7 +56,9 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const title =
     item.type === 'user-story'
       ? (lang === 'en' ? (item.titleEN ?? item.title) : item.title)
-      : item.title;
+      : item.type === 'bug-report'
+        ? (lang === 'en' ? item.en?.title : item.de?.title) ?? item.de?.title ?? item.en?.title ?? ''
+        : '';
 
   const handleCopyTitle = useCallback(() => {
     if (title) navigator.clipboard.writeText(title);

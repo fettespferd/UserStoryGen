@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, Settings, ProjectType } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType } from '../types/story';
 import { generateId } from '../utils/templates';
 
 const SYSTEM_PROMPT_DE = `Du bist ein professioneller Product Owner. Erstelle User Stories und Bug Reports.
@@ -98,7 +98,7 @@ const BUG_SCHEMA = `{
 export interface UseAIGeneratorReturn {
   generate: (
     prompt: string,
-    type: 'user-story' | 'bug-de' | 'bug-en',
+    type: 'user-story' | 'bug',
     settings: Settings | null,
     images?: string[],
     project?: ProjectType
@@ -115,7 +115,6 @@ export interface UseAIGeneratorReturn {
     settings: Settings | null
   ) => Promise<UserStory | null>;
   syncDEToEN: (item: UserStory, settings: Settings | null) => Promise<UserStory | null>;
-  translateBugTitleToEN: (item: BugReport, settings: Settings | null) => Promise<BugReport | null>;
   regenerateFullBugReport: (
     item: BugReport,
     prompt: string,
@@ -125,6 +124,10 @@ export interface UseAIGeneratorReturn {
     images: string[],
     settings: Settings | null
   ) => Promise<{ elementName: string; textDE: string; textEN: string }[] | null>;
+  generatePromptFromDescription: (
+    description: string,
+    settings: Settings | null
+  ) => Promise<string | null>;
   isLoading: boolean;
   error: string | null;
 }
@@ -154,7 +157,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       settings: Settings,
       images?: string[],
       options?: { promptPrefix?: string }
-    ): Promise<UserStoryDE | UserStoryEN | BugReport | null> => {
+    ): Promise<UserStoryDE | UserStoryEN | BugReportContent | null> => {
       const lang = type.includes('de') ? 'de' : 'en';
       const systemPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
       let schema = '';
@@ -188,7 +191,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           throw new Error(errData.error?.message || `API Fehler: ${res.status}`);
         }
         const data = await res.json();
-        return parseAIResponse(data.choices?.[0]?.message?.content?.trim() ?? '', type) as UserStoryDE | UserStoryEN | BugReport | null;
+        return parseAIResponse(data.choices?.[0]?.message?.content?.trim() ?? '', type) as UserStoryDE | UserStoryEN | BugReportContent | null;
       }
 
       const hasImages = images?.length;
@@ -226,7 +229,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
         throw new Error(errData.error?.message || `API Fehler: ${res.status}`);
       }
       const data = await res.json();
-      return parseAIResponse(data.content?.[0]?.text?.trim() ?? '', type) as UserStoryDE | UserStoryEN | BugReport | null;
+      return parseAIResponse(data.content?.[0]?.text?.trim() ?? '', type) as UserStoryDE | UserStoryEN | BugReportContent | null;
     },
     []
   );
@@ -234,7 +237,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
   const generate = useCallback(
     async (
       prompt: string,
-      type: 'user-story' | 'bug-de' | 'bug-en',
+      type: 'user-story' | 'bug',
       settings: Settings | null,
       images?: string[],
       project?: ProjectType
@@ -269,6 +272,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           const userStory: UserStory = {
             id,
             type: 'user-story',
+            createdAt: new Date().toISOString(),
             title,
             titleEN,
             project,
@@ -294,12 +298,40 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           };
           return userStory;
         }
-        const bugResult = (await generateSingle(fullPrompt, type, settings, images)) as BugReport | null;
-        if (bugResult) {
-          const withProject = { ...bugResult, project };
-          return (images?.length ? { ...withProject, images } : withProject) as StoryItem;
-        }
-        return null;
+        const deBug = (await generateSingle(fullPrompt, 'bug-de', settings, images)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        const enBug = (await generateSingle(fullPrompt, 'bug-en', settings, images)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        if (!deBug || !enBug) return null;
+        const id = generateId();
+        const bugReport: BugReport = {
+          id,
+          type: 'bug-report',
+          createdAt: new Date().toISOString(),
+          project,
+          images: images ?? [],
+          de: {
+            title: deBug.title,
+            description: deBug.description,
+            expectedResult: deBug.expectedResult,
+            actualResult: deBug.actualResult,
+            stepsToReproduce: deBug.stepsToReproduce,
+            technicalDetails: deBug.technicalDetails,
+            severityPriority: deBug.severityPriority,
+            resources: deBug.resources,
+            outOfScope: deBug.outOfScope,
+          },
+          en: {
+            title: enBug.title,
+            description: enBug.description,
+            expectedResult: enBug.expectedResult,
+            actualResult: enBug.actualResult,
+            stepsToReproduce: enBug.stepsToReproduce,
+            technicalDetails: enBug.technicalDetails,
+            severityPriority: enBug.severityPriority,
+            resources: enBug.resources,
+            outOfScope: enBug.outOfScope,
+          },
+        };
+        return bugReport;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -441,70 +473,30 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
     [generateSingle]
   );
 
-  const translateBugTitleToEN = useCallback(
-    async (item: BugReport, settings: Settings | null): Promise<BugReport | null> => {
-      if (!settings || item.lang !== 'de') return null;
-      const apiKey = settings.provider === 'openai'
-        ? (settings.apiKeyOpenAI ?? settings.apiKey)
-        : (settings.apiKeyAnthropic ?? settings.apiKey);
-      if (!apiKey) return null;
-      setIsLoading(true);
-      setError(null);
-      try {
-        const prompt = `Übersetze nur diesen deutschen Titel ins Englische. Antworte NUR mit dem englischen Titel, kein anderer Text.\n\nTitel: ${item.title}`;
-        let titleEN = item.title;
-        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
-        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
-        if (settings.provider === 'openai') {
-          const res = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: modelOpenAI,
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.2,
-            }),
-          });
-          if (!res.ok) throw new Error('API Fehler');
-          const data = await res.json();
-          titleEN = data.choices?.[0]?.message?.content?.trim() || item.title;
-        } else {
-          const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({
-              model: modelAnthropic,
-              max_tokens: 100,
-              messages: [{ role: 'user', content: prompt }],
-            }),
-          });
-          if (!res.ok) throw new Error('API Fehler');
-          const data = await res.json();
-          titleEN = data.content?.[0]?.text?.trim() || item.title;
-        }
-        return { ...item, titleEN };
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
-
   const buildBugContext = (item: BugReport): string => {
-    const isDe = item.lang === 'de';
-    return `Aktueller Bug Report (${isDe ? 'Deutsch' : 'English'}):
-${isDe ? 'Titel' : 'Title'}: ${item.title}
-${isDe ? 'Beschreibung' : 'Description'}: ${item.description}
-${isDe ? 'Erwartetes Ergebnis (SOLL)' : 'Expected Result'}: ${item.expectedResult}
-${isDe ? 'Tatsächliches Ergebnis (IST)' : 'Actual Result'}: ${item.actualResult}
-${isDe ? 'Schritte zur Reproduktion' : 'Steps to Reproduce'}: ${(item.stepsToReproduce ?? []).join(' | ')}
-${isDe ? 'Technische Details' : 'Technical Details'}: ${item.technicalDetails}
-${isDe ? 'Schweregrad/Priorität' : 'Severity/Priority'}: ${item.severityPriority}
-${isDe ? 'Ressourcen' : 'Resources'}: ${item.resources}
-${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
+    const d = item.de;
+    const e = item.en;
+    return `Aktueller Bug Report (DE):
+Titel: ${d.title}
+Beschreibung: ${d.description}
+Erwartetes Ergebnis (SOLL): ${d.expectedResult}
+Tatsächliches Ergebnis (IST): ${d.actualResult}
+Schritte zur Reproduktion: ${(d.stepsToReproduce ?? []).join(' | ')}
+Technische Details: ${d.technicalDetails}
+Schweregrad/Priorität: ${d.severityPriority}
+Ressourcen: ${d.resources}
+Außerhalb des Scope: ${d.outOfScope}
+
+Aktueller Bug Report (EN):
+Title: ${e.title}
+Description: ${e.description}
+Expected Result: ${e.expectedResult}
+Actual Result: ${e.actualResult}
+Steps to Reproduce: ${(e.stepsToReproduce ?? []).join(' | ')}
+Technical Details: ${e.technicalDetails}
+Severity/Priority: ${e.severityPriority}
+Resources: ${e.resources}
+Out of Scope: ${e.outOfScope}`;
   };
 
   const regenerateFullBugReport = useCallback(
@@ -520,21 +512,33 @@ ${isDe ? 'Außerhalb des Scope' : 'Out of Scope'}: ${item.outOfScope}`;
         const context = buildBugContext(item);
         const updatePrompt = `Nimm folgende Anpassungen vor:\n\n${prompt}\n\n${context}`;
         const opts = { promptPrefix: 'Aktualisiere diesen bestehenden Bug Report.' };
-        const type = item.lang === 'de' ? 'bug-de' : 'bug-en';
-        const result = (await generateSingle(updatePrompt, type, settings, undefined, opts)) as BugReport | null;
-        if (!result) return null;
+        const deResult = (await generateSingle(updatePrompt, 'bug-de', settings, undefined, opts)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        const enResult = (await generateSingle(updatePrompt, 'bug-en', settings, undefined, opts)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        if (!deResult || !enResult) return null;
         return {
           ...item,
-          title: result.title,
-          titleEN: (result as BugReport).titleEN ?? item.titleEN,
-          description: result.description,
-          expectedResult: result.expectedResult,
-          actualResult: result.actualResult,
-          stepsToReproduce: result.stepsToReproduce,
-          technicalDetails: result.technicalDetails,
-          severityPriority: result.severityPriority,
-          resources: result.resources,
-          outOfScope: result.outOfScope,
+          de: {
+            title: deResult.title,
+            description: deResult.description,
+            expectedResult: deResult.expectedResult,
+            actualResult: deResult.actualResult,
+            stepsToReproduce: deResult.stepsToReproduce,
+            technicalDetails: deResult.technicalDetails,
+            severityPriority: deResult.severityPriority,
+            resources: deResult.resources,
+            outOfScope: deResult.outOfScope,
+          },
+          en: {
+            title: enResult.title,
+            description: enResult.description,
+            expectedResult: enResult.expectedResult,
+            actualResult: enResult.actualResult,
+            stepsToReproduce: enResult.stepsToReproduce,
+            technicalDetails: enResult.technicalDetails,
+            severityPriority: enResult.severityPriority,
+            resources: enResult.resources,
+            outOfScope: enResult.outOfScope,
+          },
         };
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
@@ -709,13 +713,82 @@ Keine anderen Texte.`;
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, translateBugTitleToEN, extractCopyBook, isLoading, error };
+  const generatePromptFromDescription = useCallback(
+    async (description: string, settings: Settings | null): Promise<string | null> => {
+      if (!settings || !description.trim()) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+
+      setIsLoading(true);
+      setError(null);
+
+      const systemPrompt = `Du bist ein Product Owner. Erstelle einen Prompt-Vorlagentext für die KI-Generierung von User Stories oder Bug Reports.
+
+Der Output soll ein mehrzeiliger Text sein, den der User als Vorlage in ein Beschreibungsfeld einfügen kann.
+- Nutze Platzhalter in eckigen Klammern: [Rolle], [Ziel], [Kontext], etc.
+- Strukturiere mit Überschriften oder Aufzählungen
+- Kein JSON, nur Fließtext
+- Professionell, sachlich, auf Jira/Confluence ausgerichtet`;
+
+      const userPrompt = `Erstelle eine Prompt-Vorlage basierend auf:\n\n${description.trim()}`;
+
+      const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+      const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+
+      try {
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+              temperature: 0.3,
+            }),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `API Fehler: ${res.status}`);
+          }
+          const data = await res.json();
+          return data.choices?.[0]?.message?.content?.trim() ?? null;
+        }
+
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: modelAnthropic,
+            max_tokens: 2048,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userPrompt }],
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `API Fehler: ${res.status}`);
+        }
+        const data = await res.json();
+        return data.content?.[0]?.text?.trim() ?? null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, generatePromptFromDescription, isLoading, error };
 }
 
 function parseAIResponse(
   content: string,
   type: 'user-story-de' | 'user-story-en' | 'bug-de' | 'bug-en'
-): UserStoryDE | UserStoryEN | BugReport | null {
+): UserStoryDE | UserStoryEN | BugReportContent | null {
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return null;
 
@@ -777,9 +850,6 @@ function parseAIResponse(
     }
 
     return {
-      id,
-      type: 'bug-report',
-      lang: type === 'bug-de' ? 'de' : 'en',
       title: String(parsed.title ?? ''),
       description: String(parsed.description ?? ''),
       expectedResult: String(parsed.expectedResult ?? ''),

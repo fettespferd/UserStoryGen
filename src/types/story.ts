@@ -2,6 +2,9 @@
 
 export type TicketType = 'user-story' | 'bug-report';
 
+/** Auswahl für KI-Generierung: User Story oder Bug Report. */
+export type TicketTypeChoice = 'user-story' | 'bug';
+
 export type ProjectType = 'aokn' | 'healthmatch';
 
 export type StoryItem = UserStory | BugReport;
@@ -34,6 +37,25 @@ export interface UserStoryENContent {
   outOfScope: string[];
 }
 
+// ── Story Template (für leere User Stories) ──
+
+export interface StoryTemplate {
+  id: string;
+  name: string;
+  de: UserStoryDEContent;
+  en: UserStoryENContent;
+}
+
+/** Prompt-Vorlage: Füllt das KI-Eingabefeld mit vordefiniertem Text. */
+export interface PromptTemplate {
+  id: string;
+  /** Kurzer Anzeigename (für Buttons). */
+  name: string;
+  /** Vollständiger Name (für Tooltip). */
+  nameLong?: string;
+  prompt: string;
+}
+
 // ── Copy Book (UI-Texte pro Story) ──
 
 export interface CopyBookEntry {
@@ -47,6 +69,8 @@ export interface CopyBookEntry {
 export interface UserStory {
   id: string;
   type: 'user-story';
+  /** Erstellungsdatum (ISO-String). */
+  createdAt?: string;
   title: string;
   titleEN?: string;
   project?: ProjectType;
@@ -85,17 +109,10 @@ export interface UserStoryEN {
   outOfScope: string[];
 }
 
-// ── Bug Report (DE/EN) ──
+// ── Bug Report (DE + EN) ──
 
-export interface BugReport {
-  id: string;
-  type: 'bug-report';
-  lang: 'de' | 'en';
-  project?: ProjectType;
-  /** Screenshots/Design-Bilder (base64) */
-  images?: string[];
+export interface BugReportContent {
   title: string;
-  titleEN?: string;
   description: string;
   expectedResult: string;
   actualResult: string;
@@ -104,6 +121,18 @@ export interface BugReport {
   severityPriority: string;
   resources: string;
   outOfScope: string;
+}
+
+export interface BugReport {
+  id: string;
+  type: 'bug-report';
+  /** Erstellungsdatum (ISO-String). */
+  createdAt?: string;
+  project?: ProjectType;
+  /** Screenshots/Design-Bilder (base64) */
+  images?: string[];
+  de: BugReportContent;
+  en: BugReportContent;
 }
 
 // ── Settings ──
@@ -133,6 +162,9 @@ export type BackgroundOption =
   | 'plain-mint'
   | 'plain-lavender'
   | 'plain-peach'
+  | 'plain-coral'
+  | 'plain-electric'
+  | 'plain-sunset'
   | 'image-annie'
   | 'image-emile'
   | 'image-howard'
@@ -206,4 +238,8 @@ export interface Settings {
   background?: BackgroundOption;
   /** Schriftart der Oberfläche. */
   font?: FontOption;
+  /** Benutzerdefinierte Vorlagen für leere User Stories. */
+  templates?: StoryTemplate[];
+  /** Benutzerdefinierte Prompt-Vorlagen (füllen das KI-Eingabefeld). */
+  promptTemplates?: PromptTemplate[];
 }
