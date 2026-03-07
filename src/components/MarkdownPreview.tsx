@@ -24,7 +24,7 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   if (!item) return null;
 
   const md = toMarkdown(item, activeLang, { headingLevel });
-  const title = 'title' in item ? item.title : undefined;
+  const title = item.title;
 
   const handleCopyTitle = useCallback(() => {
     if (title) navigator.clipboard.writeText(title);
