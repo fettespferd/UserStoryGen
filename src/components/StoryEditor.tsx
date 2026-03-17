@@ -622,6 +622,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
   };
 
   const handleTodoPasteApply = (area: 'be' | 'fe' | 'qa') => {
+    if (!item) return;
     const items = parsePastedTodoList(todoPasteText);
     if (items.length > 0) {
       store.updateUserStoryNestedField('en', 'todos', area, [...(item.en?.todos?.[area] ?? []), ...items]);

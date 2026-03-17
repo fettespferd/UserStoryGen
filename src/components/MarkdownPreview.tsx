@@ -71,7 +71,6 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(() => suggestedTenant ?? settings?.markdownLinkTenant ?? 'none');
   const hasImages = item?.type === 'user-story' && (item as UserStory).images?.length > 0;
   const hasCopyBook = item?.type === 'user-story' && (item as UserStory).copyBook?.length > 0;
-  const hasJiraTicket = item?.type === 'user-story' && !!(item as UserStory).jiraTicket?.trim();
   const isUserStory = item?.type === 'user-story';
   const [includeImages, setIncludeImages] = useState(settings?.markdownIncludeImages !== false);
   const [includeCopyBook, setIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
