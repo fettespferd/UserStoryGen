@@ -344,6 +344,7 @@ function App() {
                 storage.loadStories(handle).then((items) => store.setItems(items));
               }}
               onStorageError={(msg) => setSnackbar({ open: true, message: msg, severity: 'error' })}
+              onSaveSuccess={() => setSnackbar({ open: true, message: 'Einstellungen gespeichert', severity: 'success' })}
               ai={ai}
             />
           </Container>

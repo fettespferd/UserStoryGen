@@ -19,6 +19,7 @@ import {
   FormControlLabel,
   Switch,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import AddIcon from '@mui/icons-material/Add';
@@ -95,6 +96,8 @@ interface SettingsProps {
   onFolderSelected?: (handle: FileSystemDirectoryHandle) => void;
   /** Wird bei Speicherfehlern aufgerufen. */
   onStorageError?: (message: string) => void;
+  /** Wird bei erfolgreichem Speichern aufgerufen (z.B. für Toast-Feedback). */
+  onSaveSuccess?: () => void;
   ai?: UseAIGeneratorReturn | null;
 }
 
@@ -111,6 +114,7 @@ export function Settings({
   onSettingsLoaded,
   onFolderSelected,
   onStorageError,
+  onSaveSuccess,
   ai,
 }: SettingsProps) {
   const [apiKeyOpenAI, setApiKeyOpenAI] = useState(settings?.apiKeyOpenAI ?? settings?.apiKey ?? '');
@@ -142,6 +146,7 @@ export function Settings({
   const [markdownIncludeImages, setMarkdownIncludeImages] = useState(settings?.markdownIncludeImages !== false);
   const [markdownIncludeCopyBook, setMarkdownIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false);
@@ -204,6 +209,7 @@ export function Settings({
   };
 
   const handleSave = async () => {
+    setSaveLoading(true);
     const next: SettingsType = {
       apiKeyOpenAI: apiKeyOpenAI.trim() || undefined,
       apiKeyAnthropic: apiKeyAnthropic.trim() || undefined,
@@ -228,12 +234,15 @@ export function Settings({
       promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
     };
     onSettingsChange(next);
-    if (storage.hasAccess) {
-      try {
+    try {
+      if (storage.hasAccess) {
         await storage.saveSettings(next);
-      } catch (err) {
-        onStorageError?.('Einstellungen speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
       }
+      onSaveSuccess?.();
+    } catch (err) {
+      onStorageError?.('Einstellungen speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -771,8 +780,13 @@ export function Settings({
         </Dialog>
         </Box>
 
-        <Button variant="contained" onClick={handleSave}>
-          Speichern
+        <Button
+          variant="contained"
+          onClick={handleSave}
+          disabled={saveLoading}
+          startIcon={saveLoading ? <CircularProgress size={18} color="inherit" /> : undefined}
+        >
+          {saveLoading ? 'Speichern…' : 'Speichern'}
         </Button>
       </Box>
     </Paper>
