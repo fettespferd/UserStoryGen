@@ -33,6 +33,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import type { Settings, StoryItem, ProjectType, TicketTypeChoice, CopyBookEntry } from '../types/story';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { getPromptTemplates } from '../utils/templates';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
 function toMarkdownTable(entries: CopyBookEntry[]): string {
   if (entries.length === 0) return '';
@@ -60,6 +61,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
+  const snackbar = useSnackbar();
   const [selectedType, setSelectedType] = useState<TicketTypeChoice>('user-story');
   const defaultProject = settings?.defaultProject ?? 'aokn';
   const showProjectOption = settings?.showProjectOption ?? true;
@@ -432,6 +434,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
             onClick={() => {
               if (copyResultDialog?.length) {
                 navigator.clipboard.writeText(toMarkdownTable(copyResultDialog));
+                snackbar.showSuccess('In Zwischenablage kopiert');
               }
             }}
             disabled={!copyResultDialog?.length}

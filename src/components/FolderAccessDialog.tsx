@@ -6,6 +6,7 @@ import {
   Button,
   Typography,
   Box,
+  CircularProgress,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 
@@ -76,7 +77,7 @@ export function FolderAccessDialog({
           variant="contained"
           onClick={handleConfirm}
           disabled={isLoading}
-          startIcon={isLoading ? undefined : <FolderOpenIcon />}
+          startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : <FolderOpenIcon />}
         >
           {isLoading ? 'Wird geöffnet…' : 'Zulassen'}
         </Button>

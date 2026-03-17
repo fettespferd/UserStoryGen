@@ -21,6 +21,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ImageIcon from '@mui/icons-material/Image';
 import type { UserStory, CopyBookEntry, Settings } from '../types/story';
+import { useSnackbar } from '../contexts/SnackbarContext';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 
@@ -53,6 +54,7 @@ interface StoryCopyBookSectionProps {
 export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBookSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractInputRef = useRef<HTMLInputElement>(null);
+  const snackbar = useSnackbar();
   const { updateUserStoryCopyBook, updateUserStoryImages } = store;
 
   const copyBook = item.copyBook ?? [];
@@ -74,6 +76,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
 
   const handleCopy = () => {
     navigator.clipboard.writeText(toMarkdownTable(copyBook));
+    snackbar.showSuccess('In Zwischenablage kopiert');
   };
 
   const handleAddImages = async (e: React.ChangeEvent<HTMLInputElement>) => {

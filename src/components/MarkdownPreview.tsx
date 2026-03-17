@@ -3,6 +3,7 @@ import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuIt
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import type { StoryItem, Settings, MarkdownLinkTenant, ProjectType, MarkdownHeadingLevel, UserStory, BugReport } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
 interface MarkdownPreviewProps {
   item: StoryItem | null;
@@ -48,6 +49,7 @@ function appendAccessibilitySection(md: string, headingLevel: MarkdownHeadingLev
 }
 
 export function MarkdownPreview({ item, activeLang, settings, onCopy }: MarkdownPreviewProps) {
+  const snackbar = useSnackbar();
   const headingLevel = (settings?.markdownHeadingLevel ?? 'h3') as MarkdownHeadingLevel;
   const lang = activeLang ?? 'de';
   const project = item?.type === 'user-story' ? (item as UserStory).project : item?.type === 'bug-report' ? (item as BugReport).project : undefined;
@@ -82,8 +84,9 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
     const link = getAccessibilityLink(linkTenant, settings, lang);
     md = appendAccessibilitySection(md, headingLevel, lang, link);
     navigator.clipboard.writeText(md);
+    snackbar.showSuccess('In Zwischenablage kopiert');
     onCopy?.();
-  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages, hasCopyBook, includeCopyBook]);
+  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages, hasCopyBook, includeCopyBook, snackbar]);
 
   if (!item) return null;
 
@@ -105,8 +108,11 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
         : '';
 
   const handleCopyTitle = useCallback(() => {
-    if (title) navigator.clipboard.writeText(title);
-  }, [title]);
+    if (title) {
+      navigator.clipboard.writeText(title);
+      snackbar.showSuccess('In Zwischenablage kopiert');
+    }
+  }, [title, snackbar]);
 
   return (
     <Paper elevation={2} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>

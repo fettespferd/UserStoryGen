@@ -30,7 +30,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Snackbar,
+  CircularProgress,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -47,6 +47,7 @@ import { StoryEditor } from './components/StoryEditor';
 import { BugEditor } from './components/BugEditor';
 import { Settings } from './components/Settings';
 import { AIGenerator } from './components/AIGenerator';
+import { SnackbarProvider, useSnackbar } from './contexts/SnackbarContext';
 
 import type { StoryItem, UserStory, BugReport, Settings as SettingsType, FontOption } from './types/story';
 import { formatDate } from './utils/format';
@@ -131,15 +132,21 @@ function createAppTheme(font: FontOption, isLightMode: boolean) {
   });
 }
 
-function App() {
+function AppContent({
+  settings,
+  setSettings,
+  storage,
+}: {
+  settings: SettingsType | null;
+  setSettings: React.Dispatch<React.SetStateAction<SettingsType | null>>;
+  storage: ReturnType<typeof useStorage>;
+}) {
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
-
-  const storage = useStorage();
   const store = useStoryStore();
   const ai = useAIGenerator();
+  const snackbar = useSnackbar();
 
-  const [settings, setSettings] = useState<SettingsType | null>(null);
   const [currentView, setCurrentView] = useState<'main' | 'settings'>('main');
   const [storyLangTab, setStoryLangTab] = useState(0);
   const [bugLangTab, setBugLangTab] = useState(0);
@@ -147,18 +154,14 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'title'>('date');
   const [filterType, setFilterType] = useState<'all' | 'user-story' | 'bug-report'>('all');
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'error' | 'success' }>({ open: false, message: '', severity: 'error' });
-
-  useEffect(() => {
-    storage.loadSettings().then((s) => s && setSettings(s));
-  }, []);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     if (storage.hasAccess) {
       storage.loadSettings().then((s) => s && setSettings(s));
       storage.loadStories().then((items) => store.setItems(items));
     }
-  }, [storage.hasAccess]);
+  }, [storage.hasAccess, setSettings, store]);
 
   const handleAIGenerated = useCallback(
     async (item: StoryItem) => {
@@ -168,27 +171,36 @@ function App() {
       if (storage.hasAccess) {
         try {
           await storage.saveStory(item);
+          snackbar.showSuccess('Story gespeichert');
         } catch (err) {
-          setSnackbar({ open: true, message: 'Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
+          snackbar.showError('Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
         }
       }
     },
-    [store, storage]
+    [store, storage, snackbar]
   );
 
-  const handleDelete = useCallback(async (id: string) => {
-    const item = store.items.find((i) => i.id === id);
-    if (item && storage.hasAccess) {
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setDeleteLoading(true);
+      const item = store.items.find((i) => i.id === id);
       try {
-        await storage.deleteStory(item);
+        if (item && storage.hasAccess) {
+          await storage.deleteStory(item);
+        }
+        store.deleteItem(id);
+        snackbar.showSuccess('Story gelöscht');
       } catch (err) {
-        setSnackbar({ open: true, message: 'Löschen fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
+        snackbar.showError('Löschen fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
+        setDeleteConfirmId(null);
         return;
+      } finally {
+        setDeleteLoading(false);
+        setDeleteConfirmId(null);
       }
-    }
-    store.deleteItem(id);
-    setDeleteConfirmId(null);
-  }, [store, storage]);
+    },
+    [store, storage, snackbar]
+  );
 
   const handleDeleteClick = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -200,11 +212,11 @@ function App() {
     const item = store.currentItem;
     const t = setTimeout(() => {
       storage.saveStory(item).catch((err) => {
-        setSnackbar({ open: true, message: 'Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'), severity: 'error' });
+        snackbar.showError('Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
       });
     }, 1000);
     return () => clearTimeout(t);
-  }, [store.currentItem, storage.hasAccess, storage.saveStory]);
+  }, [store.currentItem, storage.hasAccess, storage.saveStory, snackbar]);
 
   const currentItem = store.currentItem;
   const isStory = currentItem?.type === 'user-story';
@@ -242,19 +254,13 @@ function App() {
   }, [store.items, filterType, searchQuery, sortBy]);
 
   const bgColorKey = settings?.backgroundColor ?? (settings?.background?.startsWith('plain-') ? settings.background.replace('plain-', '') : 'dark');
-  const isLightMode = LIGHT_BACKGROUND_COLORS.includes(bgColorKey);
-  const theme = useMemo(
-    () => createAppTheme((settings?.font ?? 'source-sans-3') as FontOption, isLightMode),
-    [settings?.font, settings?.backgroundColor, settings?.background]
-  );
-
   const bgImageKey = settings?.backgroundImage ?? (settings?.background?.startsWith('image-') ? settings.background.replace('image-', '') : null);
   const bgPlainColor = PLAIN_COLORS[bgColorKey] ?? PLAIN_COLORS.dark;
   const bgImageUrl = bgImageKey ? BACKGROUND_IMAGES[bgImageKey] : null;
+  const theme = useTheme();
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <Box
         sx={{
           minHeight: '100vh',
@@ -341,10 +347,13 @@ function App() {
               onSettingsChange={setSettings}
               onSettingsLoaded={setSettings}
               onFolderSelected={(handle) => {
-                storage.loadStories(handle).then((items) => store.setItems(items));
+                storage.loadStories(handle).then((items) => {
+                  store.setItems(items);
+                  snackbar.showSuccess('Ordner ausgewählt – Stories geladen');
+                });
               }}
-              onStorageError={(msg) => setSnackbar({ open: true, message: msg, severity: 'error' })}
-              onSaveSuccess={() => setSnackbar({ open: true, message: 'Einstellungen gespeichert', severity: 'success' })}
+              onStorageError={(msg) => snackbar.showError(msg)}
+              onSaveSuccess={() => snackbar.showSuccess('Einstellungen gespeichert')}
               ai={ai}
             />
           </Container>
@@ -627,18 +636,7 @@ function App() {
         </Box>
       </Box>
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-
-      <Dialog open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+      <Dialog open={!!deleteConfirmId} onClose={() => !deleteLoading && setDeleteConfirmId(null)}>
         <DialogTitle>Story löschen?</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -646,12 +644,45 @@ function App() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteConfirmId(null)}>Abbrechen</Button>
-          <Button onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)} color="error" variant="contained">
-            Löschen
+          <Button onClick={() => setDeleteConfirmId(null)} disabled={deleteLoading}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
+            color="error"
+            variant="contained"
+            disabled={deleteLoading}
+            startIcon={deleteLoading ? <CircularProgress size={18} color="inherit" /> : undefined}
+          >
+            {deleteLoading ? 'Wird gelöscht…' : 'Löschen'}
           </Button>
         </DialogActions>
       </Dialog>
+    </>
+  );
+}
+
+function App() {
+  const storage = useStorage();
+  const [settings, setSettings] = useState<SettingsType | null>(null);
+
+  useEffect(() => {
+    storage.loadSettings().then((s) => s && setSettings(s));
+  }, [storage]);
+
+  const bgColorKey = settings?.backgroundColor ?? (settings?.background?.startsWith('plain-') ? settings.background.replace('plain-', '') : 'dark');
+  const isLightMode = LIGHT_BACKGROUND_COLORS.includes(bgColorKey);
+  const theme = useMemo(
+    () => createAppTheme((settings?.font ?? 'source-sans-3') as FontOption, isLightMode),
+    [settings?.font, settings?.backgroundColor, settings?.background]
+  );
+
+  return (
+    <ThemeProvider theme={theme}>
+      <SnackbarProvider>
+        <CssBaseline />
+        <AppContent settings={settings} setSettings={setSettings} storage={storage} />
+      </SnackbarProvider>
     </ThemeProvider>
   );
 }
