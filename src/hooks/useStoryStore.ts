@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { StoryItem, CopyBookEntry } from '../types/story';
 import { createUserStory, createBugReport, generateId } from '../utils/templates';
 
@@ -26,6 +26,11 @@ export interface UseStoryStoreReturn {
 export function useStoryStore(): UseStoryStoreReturn {
   const [currentItem, setCurrentItem] = useState<StoryItem | null>(null);
   const [items, setItems] = useState<StoryItem[]>([]);
+  const currentItemIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentItemIdRef.current = currentItem?.id ?? null;
+  }, [currentItem?.id]);
 
   const createNew = useCallback(
     (type: 'user-story' | 'bug-report'): StoryItem => {
@@ -43,11 +48,11 @@ export function useStoryStore(): UseStoryStoreReturn {
       if (!prev) return prev;
       return { ...prev, [field]: value };
     });
-    const id = currentItem?.id ?? '';
+    const id = currentItemIdRef.current ?? '';
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
     );
-  }, [currentItem?.id]);
+  }, []);
 
   const updateArrayField = useCallback((_field: string, _index: number, _value: string) => {
     // Deprecated for BugReport – use updateBugReportArrayField
