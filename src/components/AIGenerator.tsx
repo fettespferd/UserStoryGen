@@ -68,7 +68,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const showProjectOption = settings?.showProjectOption ?? true;
   const [project, setProject] = useState<ProjectType>(defaultProject);
   const [prompt, setPrompt] = useState('');
-  const [images, setImages] = useState<string[]>([]);
+  const [imageItems, setImageItems] = useState<{ dataUrl: string; filename: string }[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copyResultDialog, setCopyResultDialog] = useState<CopyBookEntry[] | null>(null);
@@ -81,11 +81,12 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
     const fileArray = Array.from(files);
     const imageFiles = fileArray.filter((f) => f.type.startsWith('image/'));
     if (!imageFiles.length) return;
-    const dataUrls: string[] = [];
-    for (let i = 0; i < Math.min(imageFiles.length, 5 - images.length); i++) {
-      dataUrls.push(await fileToDataUrl(imageFiles[i]));
+    const newItems: { dataUrl: string; filename: string }[] = [];
+    for (let i = 0; i < Math.min(imageFiles.length, 5 - imageItems.length); i++) {
+      const f = imageFiles[i];
+      newItems.push({ dataUrl: await fileToDataUrl(f), filename: f.name || `bild-${i + 1}` });
     }
-    setImages((prev) => [...prev, ...dataUrls].slice(0, 5));
+    setImageItems((prev) => [...prev, ...newItems].slice(0, 5));
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,7 +99,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (images.length < 5) setIsDragging(true);
+    if (imageItems.length < 5) setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -112,18 +113,22 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
     e.stopPropagation();
     setIsDragging(false);
     const files = e.dataTransfer.files;
-    if (!files?.length || images.length >= 5) return;
+    if (!files?.length || imageItems.length >= 5) return;
     await processFiles(files);
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImageItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleGenerate = async () => {
     if (selectedType === 'copy-table') {
-      if (!images.length || !settings) return;
-      const extracted = await ai.extractCopyBook(images, settings);
+      if (!imageItems.length || !settings) return;
+      const extracted = await ai.extractCopyBook(
+        imageItems.map((i) => i.dataUrl),
+        settings,
+        imageItems.map((i) => i.filename)
+      );
       if (extracted?.length) {
         setCopyResultDialog(extracted);
       }
@@ -135,9 +140,10 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
       prompt,
       selectedType,
       settings,
-      images.length ? images : undefined,
+      imageItems.length ? imageItems.map((i) => i.dataUrl) : undefined,
       projectToUse,
-      detailLevel
+      detailLevel,
+      imageItems.length ? imageItems.map((i) => i.filename) : undefined
     );
     if (result) {
       onGenerated(result);
@@ -149,7 +155,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   );
   const canGenerate =
     hasApiKey &&
-    (selectedType === 'copy-table' ? images.length > 0 : prompt.trim().length > 0);
+    (selectedType === 'copy-table' ? imageItems.length > 0 : prompt.trim().length > 0);
   const promptTemplates = getPromptTemplates(settings?.promptTemplates);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
@@ -288,13 +294,13 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           size="small"
           startIcon={<ImageIcon />}
           onClick={() => fileInputRef.current?.click()}
-          disabled={images.length >= 5}
+          disabled={imageItems.length >= 5}
         >
-          Bilder hochladen {images.length < 5 && 'oder hier ablegen'}
+          Bilder hochladen {imageItems.length < 5 && 'oder hier ablegen'}
         </Button>
-        {images.length > 0 && (
+        {imageItems.length > 0 && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-            {images.map((dataUrl, i) => (
+            {imageItems.map((item, i) => (
               <Box
                 key={i}
                 sx={{
@@ -308,8 +314,8 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
                 }}
               >
                 <img
-                  src={dataUrl}
-                  alt={`Upload ${i + 1}`}
+                  src={item.dataUrl}
+                  alt={item.filename}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
                 <IconButton

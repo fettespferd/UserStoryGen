@@ -41,26 +41,32 @@ function getSystemPrompt(lang: 'de' | 'en', customDE?: string, customEN?: string
   return getDefaultSystemPrompt(lang);
 }
 
-function getDetailInstruction(detailLevel: DetailLevel, type: 'user-story' | 'bug'): string {
+function getDetailInstruction(detailLevel: DetailLevel, type: 'user-story' | 'bug', hasImages?: boolean): string {
+  const imageHint = hasImages
+    ? ' Die angehängten Design-Bilder sind aussagekräftig – nutze sie vollständig und leite daraus alle sichtbaren Anforderungen, UI-Elemente, Abläufe und Zustände ab.'
+    : '';
   if (type === 'user-story') {
     switch (detailLevel) {
       case 'compact':
-        return 'Detaillierungsgrad: Kompakt. Erstelle 5–7 Akzeptanzkriterien, knappe User Flows.';
+        return 'Detaillierungsgrad: Kompakt. Erstelle 5–7 Akzeptanzkriterien, knappe User Flows.' + imageHint;
       case 'standard':
-        return 'Detaillierungsgrad: Standard. Erstelle 8–12 Akzeptanzkriterien.';
+        return 'Detaillierungsgrad: Standard. Erstelle 8–12 Akzeptanzkriterien.' + imageHint;
       case 'detailed':
       default:
-        return 'Detaillierungsgrad: Ausführlich. Erstelle mindestens 15 Akzeptanzkriterien. Deck alle Randfälle, Fehlerszenarien, Validierungen und nicht-funktionale Aspekte (UX, Performance, Sicherheit, Barrierefreiheit) ab. Ausführliche User Flows mit allen relevanten Szenarien.';
+        return 'Detaillierungsgrad: Ausführlich. Erstelle mindestens 15 Akzeptanzkriterien. Deck alle Randfälle, Fehlerszenarien, Validierungen und nicht-funktionale Aspekte (UX, Performance, Sicherheit, Barrierefreiheit) ab. Ausführliche User Flows mit allen relevanten Szenarien.' + imageHint;
     }
   }
+  const bugImageHint = hasImages
+    ? ' Die angehängten Screenshots sind aussagekräftig – nutze sie vollständig für die Reproduktionsschritte und technischen Details.'
+    : '';
   switch (detailLevel) {
     case 'compact':
-      return 'Detaillierungsgrad: Kompakt. Fokussiere auf die Hauptschritte zur Reproduktion.';
+      return 'Detaillierungsgrad: Kompakt. Fokussiere auf die Hauptschritte zur Reproduktion.' + bugImageHint;
     case 'standard':
-      return 'Detaillierungsgrad: Standard.';
+      return 'Detaillierungsgrad: Standard.' + bugImageHint;
     case 'detailed':
     default:
-      return 'Detaillierungsgrad: Ausführlich. Sehr detaillierte Schritte zur Reproduktion, alle technischen Details, betroffene Varianten und Randfälle.';
+      return 'Detaillierungsgrad: Ausführlich. Sehr detaillierte Schritte zur Reproduktion, alle technischen Details, betroffene Varianten und Randfälle.' + bugImageHint;
   }
 }
 
@@ -126,7 +132,8 @@ export interface UseAIGeneratorReturn {
     settings: Settings | null,
     images?: string[],
     project?: ProjectType,
-    detailLevel?: DetailLevel
+    detailLevel?: DetailLevel,
+    imageFilenames?: string[]
   ) => Promise<StoryItem | null>;
   regenerateSection: (
     lang: 'de' | 'en',
@@ -155,7 +162,8 @@ export interface UseAIGeneratorReturn {
   ) => Promise<BugReport | null>;
   extractCopyBook: (
     images: string[],
-    settings: Settings | null
+    settings: Settings | null,
+    imageFilenames?: string[]
   ) => Promise<{ elementName: string; textDE: string; textEN: string }[] | null>;
   generatePromptFromDescription: (
     description: string,
@@ -189,7 +197,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       type: 'user-story-de' | 'user-story-en' | 'bug-de' | 'bug-en',
       settings: Settings,
       images?: string[],
-      options?: { promptPrefix?: string; detailLevel?: DetailLevel; genType?: 'user-story' | 'bug' }
+      options?: { promptPrefix?: string; detailLevel?: DetailLevel; genType?: 'user-story' | 'bug'; hasImages?: boolean; imageFilenames?: string[] }
     ): Promise<UserStoryDE | UserStoryEN | BugReportContent | null> => {
       const lang = type.includes('de') ? 'de' : 'en';
       const systemPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
@@ -199,10 +207,14 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       else schema = BUG_SCHEMA;
       const prefix = options?.promptPrefix ?? 'Erstelle basierend auf folgender Beschreibung:';
       const detailInstruction = options?.detailLevel && options?.genType
-        ? `${getDetailInstruction(options.detailLevel, options.genType)}\n\n`
+        ? `${getDetailInstruction(options.detailLevel, options.genType, options.hasImages)}\n\n`
         : '';
+      const filenameHint =
+        options?.hasImages && options?.imageFilenames?.length
+          ? `Angehängte Bilder (Dateinamen als Kontexthinweis): ${options.imageFilenames.map((f, i) => `Bild ${i + 1}: ${f}`).join(', ')}\n\n`
+          : '';
       const basePrompt = images?.length
-        ? `${detailInstruction}Analysiere die angehängten Design-Bilder und erstelle basierend darauf sowie folgender Beschreibung:\n\n${prompt || '(Keine zusätzliche Beschreibung)'}`
+        ? `${detailInstruction}${filenameHint}Analysiere die angehängten Design-Bilder und erstelle basierend darauf sowie folgender Beschreibung:\n\n${prompt || '(Keine zusätzliche Beschreibung)'}`
         : `${detailInstruction}${prefix}\n\n${prompt}`;
       const userPrompt = `${basePrompt}\n\nAntworte mit JSON im folgenden Schema (id wird automatisch gesetzt):\n${schema}`;
       const userContent = images?.length ? buildMessageContent(userPrompt, images) : userPrompt;
@@ -277,7 +289,8 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       settings: Settings | null,
       images?: string[],
       project?: ProjectType,
-      detailLevel: DetailLevel = 'standard'
+      detailLevel: DetailLevel = 'standard',
+      imageFilenames?: string[]
     ): Promise<StoryItem | null> => {
       if (!settings) return null;
       const apiKey = settings.provider === 'openai'
@@ -291,7 +304,12 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       const fullPrompt = projectPrefix + prompt;
       setIsLoading(true);
       setError(null);
-      const genOptions = { detailLevel, genType: type };
+      const genOptions = {
+        detailLevel,
+        genType: type,
+        hasImages: Boolean(images?.length),
+        imageFilenames: imageFilenames?.length ? imageFilenames : undefined,
+      };
       try {
         if (type === 'user-story') {
           const deResult = await generateSingle(fullPrompt, 'user-story-de', settings, images, genOptions) as UserStoryDE | null;
@@ -653,7 +671,8 @@ Out of Scope: ${e.outOfScope}`;
   const extractCopyBook = useCallback(
     async (
       images: string[],
-      settings: Settings | null
+      settings: Settings | null,
+      imageFilenames?: string[]
     ): Promise<{ elementName: string; textDE: string; textEN: string }[] | null> => {
       if (!settings || !images.length) return null;
       const apiKey = settings.provider === 'openai'
@@ -664,6 +683,11 @@ Out of Scope: ${e.outOfScope}`;
       setIsLoading(true);
       setError(null);
 
+      const filenameHint =
+        imageFilenames?.length
+          ? `Die angehängten Bilder (Dateinamen als Kontexthinweis): ${imageFilenames.map((f, i) => `Bild ${i + 1}: ${f}`).join(', ')}.\n\n`
+          : '';
+      const userText = `${filenameHint}Extrahiere alle UI-Texte aus den Bildern und gib sie als JSON-Array zurück.`;
       const systemPrompt = `Du bist ein UX-Experte. Analysiere die angehängten Design-Bilder (UI-Mockups, Screenshots) und extrahiere alle sichtbaren UI-Texte.
 Erstelle eine Liste mit:
 - elementName: technischer Bezeichner auf Englisch (z.B. login_button, header_title, error_message)
@@ -677,10 +701,7 @@ Keine anderen Texte.`;
       const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
       try {
         if (settings.provider === 'openai') {
-          const userContent = buildMessageContent(
-            'Extrahiere alle UI-Texte aus den Bildern und gib sie als JSON-Array zurück.',
-            images
-          );
+          const userContent = buildMessageContent(userText, images);
           const res = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -730,7 +751,7 @@ Keine anderen Texte.`;
                       source: { type: 'base64', media_type: mediaType, data: base64 },
                     };
                   }),
-                  { type: 'text', text: 'Extrahiere alle UI-Texte.' },
+                  { type: 'text', text: userText },
                 ],
               },
             ],
