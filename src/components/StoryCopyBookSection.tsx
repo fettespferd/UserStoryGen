@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   Paper,
   Typography,
@@ -24,6 +24,7 @@ import type { UserStory, CopyBookEntry, Settings } from '../types/story';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
+import { ImageLightbox } from './ImageLightbox';
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -59,6 +60,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
 
   const copyBook = item.copyBook ?? [];
   const images = item.images ?? [];
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const addRow = () => {
     updateUserStoryCopyBook([...copyBook, { elementName: '', textDE: '', textEN: '' }]);
@@ -232,7 +234,10 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                   overflow: 'hidden',
                   border: '1px solid',
                   borderColor: 'divider',
+                  cursor: 'pointer',
+                  '&:hover img': { opacity: 0.9 },
                 }}
+                onClick={() => setLightboxImage(dataUrl)}
               >
                 <img
                   src={dataUrl}
@@ -241,7 +246,7 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                 />
                 <IconButton
                   size="small"
-                  onClick={() => removeImage(i)}
+                  onClick={(e) => { e.stopPropagation(); removeImage(i); }}
                   sx={{
                     position: 'absolute',
                     top: 0,
@@ -256,6 +261,12 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
               </Box>
             ))}
             </Box>
+            <ImageLightbox
+              open={!!lightboxImage}
+              onClose={() => setLightboxImage(null)}
+              src={lightboxImage ?? ''}
+              alt="Design"
+            />
           </>
         )}
       </Box>

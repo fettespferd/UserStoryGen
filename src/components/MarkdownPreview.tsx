@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { Components } from 'react-markdown';
 import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -7,6 +8,7 @@ import remarkGfm from 'remark-gfm';
 import type { StoryItem, Settings, MarkdownLinkTenant, ProjectType, MarkdownHeadingLevel, UserStory, BugReport } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { ImageLightbox } from './ImageLightbox';
 
 interface MarkdownPreviewProps {
   item: StoryItem | null;
@@ -77,6 +79,7 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const [includeJiraTicket, setIncludeJiraTicket] = useState(settings?.markdownIncludeJiraTicket !== false);
   const [includeTodos, setIncludeTodos] = useState(settings?.markdownIncludeTodos !== false);
   const [includeEfforts, setIncludeEfforts] = useState(settings?.markdownIncludeEfforts !== false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (suggestedTenant) {
@@ -303,11 +306,34 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
             '& table': { borderCollapse: 'collapse', width: '100%', mb: 1 },
             '& th, & td': { border: '1px solid', borderColor: 'divider', p: 1, textAlign: 'left' },
             '& th': { bgcolor: 'action.hover', fontWeight: 600 },
-            '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+            '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1, cursor: 'pointer' },
             '& strong': { fontWeight: 600 },
           }}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              img: ({ src, alt, ...props }) => (
+                <img
+                  {...props}
+                  src={src}
+                  alt={alt ?? ''}
+                  onClick={() => src && setLightboxImage(src)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => src && (e.key === 'Enter' || e.key === ' ') && setLightboxImage(src)}
+                />
+              ),
+            } as Components}
+          >
+            {md}
+          </ReactMarkdown>
+          <ImageLightbox
+            open={!!lightboxImage}
+            onClose={() => setLightboxImage(null)}
+            src={lightboxImage ?? ''}
+            alt="Vorschau"
+          />
         </Box>
       </Box>
     </Paper>

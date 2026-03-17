@@ -6,6 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { EditableField } from './EditableField';
 import { MarkdownPreview } from './MarkdownPreview';
+import { ImageLightbox } from './ImageLightbox';
 import type { BugReport, Settings } from '../types/story';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
@@ -65,6 +66,7 @@ export function BugEditor({ item, store, ai, settings, onDelete, onSave, saveLoa
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fullRegenOpen, setFullRegenOpen] = useState(false);
   const [fullRegenPrompt, setFullRegenPrompt] = useState('');
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const lang: 'de' | 'en' = activeLangTab === 1 ? 'en' : 'de';
   const labels = lang === 'de' ? LABELS_DE : LABELS_EN;
   const content = lang === 'de' ? item?.de : item?.en;
@@ -296,7 +298,10 @@ export function BugEditor({ item, store, ai, settings, onDelete, onSave, saveLoa
                       overflow: 'hidden',
                       border: '1px solid',
                       borderColor: 'divider',
+                      cursor: 'pointer',
+                      '&:hover img': { opacity: 0.9 },
                     }}
+                    onClick={() => setLightboxImage(dataUrl)}
                   >
                     <img
                       src={dataUrl}
@@ -305,7 +310,7 @@ export function BugEditor({ item, store, ai, settings, onDelete, onSave, saveLoa
                     />
                     <IconButton
                       size="small"
-                      onClick={() => updateBugReportImages(images.filter((_, idx) => idx !== i))}
+                      onClick={(e) => { e.stopPropagation(); updateBugReportImages(images.filter((_, idx) => idx !== i)); }}
                       sx={{
                         position: 'absolute',
                         top: 0,
@@ -321,6 +326,12 @@ export function BugEditor({ item, store, ai, settings, onDelete, onSave, saveLoa
                 ))}
               </Box>
             )}
+            <ImageLightbox
+              open={!!lightboxImage}
+              onClose={() => setLightboxImage(null)}
+              src={lightboxImage ?? ''}
+              alt="Screenshot"
+            />
           </Box>
         </Box>
       </Paper>

@@ -34,6 +34,7 @@ import type { Settings, StoryItem, ProjectType, TicketTypeChoice, CopyBookEntry,
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { getPromptTemplates } from '../utils/templates';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { ImageLightbox } from './ImageLightbox';
 
 function toMarkdownTable(entries: CopyBookEntry[]): string {
   if (entries.length === 0) return '';
@@ -72,6 +73,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copyResultDialog, setCopyResultDialog] = useState<CopyBookEntry[] | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     setProject(defaultProject);
@@ -300,7 +302,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         </Button>
         {imageItems.length > 0 && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-            {imageItems.map((item, i) => (
+            {imageItems.map((imgItem, i) => (
               <Box
                 key={i}
                 sx={{
@@ -311,16 +313,19 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
                   overflow: 'hidden',
                   border: '1px solid',
                   borderColor: 'divider',
+                  cursor: 'pointer',
+                  '&:hover img': { opacity: 0.9 },
                 }}
+                onClick={() => setLightboxImage(imgItem.dataUrl)}
               >
                 <img
-                  src={item.dataUrl}
-                  alt={item.filename}
+                  src={imgItem.dataUrl}
+                  alt={imgItem.filename}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
                 <IconButton
                   size="small"
-                  onClick={() => removeImage(i)}
+                  onClick={(e) => { e.stopPropagation(); removeImage(i); }}
                   sx={{
                     position: 'absolute',
                     top: 0,
@@ -336,6 +341,12 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
             ))}
           </Box>
         )}
+        <ImageLightbox
+          open={!!lightboxImage}
+          onClose={() => setLightboxImage(null)}
+          src={lightboxImage ?? ''}
+          alt="Bild"
+        />
       </Box>
 
       {selectedType !== 'copy-table' && (
