@@ -455,13 +455,13 @@ function AppContent({
                                     size="small"
                                     onClick={(e) => handleDeleteClick(e, item.id)}
                                     color="error"
-                                    sx={{ opacity: 0.7, '&:hover': { opacity: 1 } }}
+                                    sx={{ opacity: 0.7, '&:hover': { opacity: 1 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     title="Löschen"
                                   >
                                     <DeleteIcon fontSize="small" />
                                   </IconButton>
                                 }
-                                sx={{ alignItems: 'stretch' }}
+                                sx={{ alignItems: 'center' }}
                               >
                                 <ListItemButton
                                   onClick={() => {
@@ -580,13 +580,13 @@ function AppContent({
                               size="small"
                               onClick={(e) => handleDeleteClick(e, item.id)}
                               color="error"
-                              sx={{ mr: 1, opacity: 0.7, '&:hover': { opacity: 1 } }}
+                              sx={{ mr: 1, opacity: 0.7, '&:hover': { opacity: 1 }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               title="Löschen"
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           }
-                          sx={{ alignItems: 'stretch' }}
+                          sx={{ alignItems: 'center' }}
                         >
                           <ListItemButton
                             onClick={() => {

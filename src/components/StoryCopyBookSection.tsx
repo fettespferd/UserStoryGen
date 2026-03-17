@@ -331,10 +331,12 @@ export function StoryCopyBookSection({ item, store, ai, settings }: StoryCopyBoo
                     variant="standard"
                   />
                 </TableCell>
-                <TableCell>
-                  <IconButton size="small" onClick={() => removeEntry(index)} color="error">
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
+                <TableCell sx={{ verticalAlign: 'middle', width: 48 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <IconButton size="small" onClick={() => removeEntry(index)} color="error" sx={{ flexShrink: 0 }}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}

@@ -98,7 +98,7 @@ export function EditableField({
     <Box
       sx={{
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: 1,
         width: '100%',
         p: 1.5,
@@ -126,11 +126,11 @@ export function EditableField({
           {value || placeholder || '(leer)'}
         </Typography>
       </Box>
-      <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-        <IconButton size="small" onClick={handleCopy} title="Kopieren">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+        <IconButton size="small" onClick={handleCopy} title="Kopieren" sx={{ flexShrink: 0 }}>
           <ContentCopyIcon fontSize="small" />
         </IconButton>
-        <IconButton size="small" onClick={handleStartEdit} title="Bearbeiten">
+        <IconButton size="small" onClick={handleStartEdit} title="Bearbeiten" sx={{ flexShrink: 0 }}>
           <EditIcon fontSize="small" />
         </IconButton>
       </Box>

@@ -582,7 +582,7 @@ export function Settings({
                   >
                     {ai?.isLoading && generateForId === t.id ? '…' : 'Mit KI generieren'}
                   </Button>
-                  <IconButton size="small" color="error" onClick={() => setPromptTemplates((prev) => prev.filter((x) => x.id !== t.id))} title="Vorlage löschen">
+                  <IconButton size="small" color="error" onClick={() => setPromptTemplates((prev) => prev.filter((x) => x.id !== t.id))} title="Vorlage löschen" sx={{ flexShrink: 0 }}>
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </Box>
