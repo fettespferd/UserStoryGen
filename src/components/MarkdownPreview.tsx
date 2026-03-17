@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import type { StoryItem, Settings, MarkdownLinkTenant, ProjectType, MarkdownHeadingLevel, UserStory, BugReport } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
@@ -53,6 +53,9 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const project = item?.type === 'user-story' ? (item as UserStory).project : item?.type === 'bug-report' ? (item as BugReport).project : undefined;
   const suggestedTenant = projectToTenant(project);
   const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(() => suggestedTenant ?? settings?.markdownLinkTenant ?? 'none');
+  const hasImages = item?.type === 'user-story' && (item as UserStory).images?.length > 0;
+  const defaultIncludeImages = settings?.markdownIncludeImages !== false;
+  const [includeImages, setIncludeImages] = useState(defaultIncludeImages);
 
   useEffect(() => {
     if (suggestedTenant) {
@@ -60,18 +63,24 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
     }
   }, [suggestedTenant]);
 
+  useEffect(() => {
+    setIncludeImages(settings?.markdownIncludeImages !== false);
+  }, [settings?.markdownIncludeImages, item?.id]);
+
   const handleCopy = useCallback(() => {
     if (!item) return;
-    let md = toMarkdown(item, activeLang, { headingLevel });
+    const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
+    let md = toMarkdown(item, activeLang, { headingLevel, images: imagesOpt });
     const link = getAccessibilityLink(linkTenant, settings, lang);
     md = appendAccessibilitySection(md, headingLevel, lang, link);
     navigator.clipboard.writeText(md);
     onCopy?.();
-  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy]);
+  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages]);
 
   if (!item) return null;
 
-  let md = toMarkdown(item, activeLang, { headingLevel });
+  const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
+  let md = toMarkdown(item, activeLang, { headingLevel, images: imagesOpt });
   const link = getAccessibilityLink(linkTenant, settings, lang);
   md = appendAccessibilitySection(md, headingLevel, lang, link);
   const title =
@@ -134,6 +143,18 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
             <Typography variant="caption" color="warning.main">
               URL in Einstellungen fehlt
             </Typography>
+          )}
+          {hasImages && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeImages}
+                  onChange={(e) => setIncludeImages(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Bilder einbinden"
+            />
           )}
           <Button
           variant="contained"

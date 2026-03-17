@@ -5,7 +5,7 @@ import type {
   BugReport,
   MarkdownHeadingLevel,
 } from '../types/story';
-import { stripAcPrefix } from './format';
+import { stripAcPrefix, stripFlowStepNumber } from './format';
 
 const HEADING_PREFIX: Record<MarkdownHeadingLevel, string> = {
   h1: '#',
@@ -20,6 +20,8 @@ function heading(level: MarkdownHeadingLevel, text: string): string {
 
 export interface MarkdownOptions {
   headingLevel?: MarkdownHeadingLevel;
+  /** Design-Bilder (base64 data URLs) – werden als Markdown-Bilder eingefügt */
+  images?: string[];
 }
 
 export function toMarkdown(
@@ -28,10 +30,13 @@ export function toMarkdown(
   options?: MarkdownOptions
 ): string {
   const h = options?.headingLevel ?? 'h3';
+  const images = options?.images ?? (item.type === 'user-story' ? (item as UserStory).images : undefined);
   if (item.type === 'bug-report') return bugReportToMarkdown(item, activeLang ?? 'de', h);
   if (item.type === 'user-story') {
     const lang = activeLang ?? 'de';
-    return lang === 'de' ? userStoryDEToMarkdown(item.de, h, item.links) : userStoryENToMarkdown(item.en, h, item.links);
+    return lang === 'de'
+      ? userStoryDEToMarkdown(item.de, h, item.links, images)
+      : userStoryENToMarkdown(item.en, h, item.links, images);
   }
   if (item.type === 'user-story-de') {
     const legacyLinks = [...(item.anhaenge ?? []), ...(item.jiraTicket?.trim() ? [item.jiraTicket] : [])];
@@ -109,10 +114,23 @@ function bugReportToMarkdown(bug: BugReport, activeLang: 'de' | 'en', h: Markdow
   return lines.join('\n');
 }
 
+function appendImagesSection(lines: string[], h: MarkdownHeadingLevel, images: string[], labelDE: string, labelEN: string, lang: 'de' | 'en'): void {
+  if (!images?.length) return;
+  const label = lang === 'de' ? labelDE : labelEN;
+  lines.push('');
+  lines.push(heading(h, label));
+  lines.push('');
+  images.forEach((dataUrl, i) => {
+    lines.push(`![Design ${i + 1}](${dataUrl})`);
+    lines.push('');
+  });
+}
+
 function userStoryDEToMarkdown(
   story: UserStoryDE | import('../types/story').UserStoryDEContent,
   h: MarkdownHeadingLevel,
-  links?: string[]
+  links?: string[],
+  images?: string[]
 ): string {
   const lines: string[] = [];
 
@@ -132,17 +150,18 @@ function userStoryDEToMarkdown(
   lines.push('');
   lines.push(heading(h, 'Happy Flow'));
   lines.push('');
-  story.nutzerflows.happyFlow.forEach((step) => lines.push(step));
+  story.nutzerflows.happyFlow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
   if (story.nutzerflows.fehlerszenario && story.nutzerflows.fehlerszenario.length > 0) {
     lines.push('');
     lines.push(heading(h, 'Fehlerszenario'));
     lines.push('');
-    story.nutzerflows.fehlerszenario.forEach((step) => lines.push(step));
+    story.nutzerflows.fehlerszenario.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
   }
   lines.push('');
   lines.push(heading(h, '📚 Anhänge / Links'));
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
+  appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'de');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
@@ -154,7 +173,8 @@ function userStoryDEToMarkdown(
 function userStoryENToMarkdown(
   story: UserStoryEN | import('../types/story').UserStoryENContent,
   h: MarkdownHeadingLevel,
-  links?: string[]
+  links?: string[],
+  images?: string[]
 ): string {
   const lines: string[] = [];
 
@@ -186,17 +206,18 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, 'Happy path'));
   lines.push('');
-  story.userFlows.happyPath.forEach((step) => lines.push(step));
+  story.userFlows.happyPath.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
   if (story.userFlows.errorScenario && story.userFlows.errorScenario.length > 0) {
     lines.push('');
     lines.push(heading(h, 'Error scenario'));
     lines.push('');
-    story.userFlows.errorScenario.forEach((step) => lines.push(step));
+    story.userFlows.errorScenario.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
   }
   lines.push('');
   lines.push(heading(h, '📚 Resources / Links'));
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
+  appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'en');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');

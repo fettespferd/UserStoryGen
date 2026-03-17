@@ -3,6 +3,11 @@ export function stripAcPrefix(text: string): string {
   return text.replace(/^AC\d+:\s*/i, '').trim();
 }
 
+/** Entfernt führende Nummerierung (1. , 2. , 1., etc.) – Nutzerflow-Schritte werden im Markdown aus der Reihenfolge nummeriert */
+export function stripFlowStepNumber(text: string): string {
+  return text.replace(/^\d+\.\s*/, '').trim();
+}
+
 /** Formatiert Datum für Anzeige (z. B. "07.03.2025"). */
 export function formatDate(isoOrId: string | undefined, fallbackId?: string): string {
   if (isoOrId && /^\d{4}-\d{2}-\d{2}/.test(isoOrId)) {

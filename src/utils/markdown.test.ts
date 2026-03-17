@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toMarkdown } from './markdown';
-import type { UserStoryDE, BugReport } from '../types/story';
+import type { UserStoryDE, BugReport, UserStory } from '../types/story';
 
 describe('toMarkdown', () => {
   it('formats User Story DE correctly', () => {
@@ -27,6 +27,36 @@ describe('toMarkdown', () => {
     expect(md).toContain('- PROJ-123');
     expect(md).toContain('- Login');
     expect(md).toContain('- Nichts');
+  });
+
+  it('includes Design-Bilder section when UserStory has images', () => {
+    const story: UserStory = {
+      id: '1',
+      type: 'user-story',
+      title: 'Test',
+      de: {
+        beschreibung: 'Beschreibung',
+        akzeptanzkriterien: ['AC1: Test'],
+        voraussetzungen: [],
+        nutzerflows: { happyFlow: ['1. Step'] },
+        outOfScope: [],
+      },
+      en: {
+        description: 'Description',
+        acceptanceCriteria: ['AC1: Test'],
+        todos: { be: [], fe: [], qa: [] },
+        roles: 'User',
+        prerequisites: [],
+        userFlows: { happyPath: ['1. Step'] },
+        outOfScope: [],
+      },
+      links: [],
+      copyBook: [],
+      images: ['data:image/png;base64,iVBORw0KGgo='],
+    };
+    const md = toMarkdown(story, 'de');
+    expect(md).toContain('🖼️ Design-Bilder');
+    expect(md).toContain('![Design 1](data:image/png;base64,iVBORw0KGgo=)');
   });
 
   it('formats Bug Report correctly', () => {

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType } from '../types/story';
 import { generateId } from '../utils/templates';
+import { stripFlowStepNumber } from '../utils/format';
 
 const SYSTEM_PROMPT_DE = `Du bist ein professioneller Product Owner. Erstelle User Stories und Bug Reports.
 
@@ -10,7 +11,7 @@ Kein unnötiges Fachgesimpel, keine komplizierten Satzstrukturen.
 Keine Umgangssprache, keine KI-Floskeln. Direkt in Jira/Confluence nutzbar.
 
 Für Akzeptanzkriterien: AC1:, AC2:, AC3: als Format (Überschrift und Punkte fett).
-Nutzerflows: Happy Flow und Fehlerszenario nur wenn zur Story passend.
+Nutzerflows: Happy Flow und Fehlerszenario nur wenn zur Story passend. Schritte OHNE Nummernprefix (z.B. "User öffnet..." nicht "1. User öffnet...") – die Reihenfolge ergibt die Nummerierung.
 ACs sind Quelle der Wahrheit und überprüfbar. Funktionale und nicht-funktionale Anforderungen berücksichtigen.
 UI-Texte nur in Anführungszeichen.
 
@@ -24,7 +25,7 @@ No unnecessary jargon, no complicated sentence structures.
 No colloquialisms, no AI clichés. Ready for Jira/Confluence.
 
 For Acceptance Criteria: AC1:, AC2:, AC3: format (heading and points bold).
-User flows: Happy path and error scenario only when fitting the story.
+User flows: Happy path and error scenario only when fitting the story. Steps WITHOUT number prefix (e.g. "User opens..." not "1. User opens...") – order determines numbering.
 ACs are source of truth and verifiable. Consider functional and non-functional requirements.
 UI texts in quotes only.
 
@@ -62,7 +63,7 @@ const USER_STORY_DE_SCHEMA = `{
   "beschreibung": "Als [Rolle] möchte ich [Ziel], damit [Nutzen].",
   "akzeptanzkriterien": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "voraussetzungen": "...",
-  "nutzerflows": { "happyFlow": ["1. User …", "2. System …"], "fehlerszenario": ["1. User …", "2. System erkennt ..."] },
+  "nutzerflows": { "happyFlow": ["User …", "System …"], "fehlerszenario": ["User …", "System erkennt ..."] },
   "anhaenge": ["[Designs, APIs, Jira-Link]"],
   "outOfScope": "...",
   "jiraTicket": "..."
@@ -76,7 +77,7 @@ const USER_STORY_EN_SCHEMA = `{
   "todos": { "be": [], "fe": [], "qa": [] },
   "roles": "...",
   "prerequisites": "...",
-  "userFlows": { "happyPath": ["1. User …", "2. System …"], "errorScenario": ["1. User …", "2. System detects ..."] },
+  "userFlows": { "happyPath": ["User …", "System …"], "errorScenario": ["User …", "System detects ..."] },
   "resources": ["[Designs, APIs, Jira link]"],
   "outOfScope": "..."
 }`;
@@ -605,7 +606,11 @@ Out of Scope: ${e.outOfScope}`;
         const match = text.match(/\{[^}]*"value"[^}]*\}/);
         if (!match) return null;
         const parsed = JSON.parse(match[0]) as { value: string | string[] };
-        return parsed.value ?? null;
+        const value = parsed.value ?? null;
+        if (Array.isArray(value) && (section.includes('Flow') || section.includes('flow') || section.includes('szenario') || section.includes('Scenario'))) {
+          return value.map(stripFlowStepNumber);
+        }
+        return value;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -765,7 +770,7 @@ Keine anderen Texte.`;
       const label = sectionLabels[section]?.[lang] ?? 'Listenpunkt';
       const isAc = section === 'akzeptanzkriterien' || section === 'acceptanceCriteria';
       const isFlow = section.includes('Flow') || section.includes('flow') || section.includes('szenario') || section.includes('Scenario');
-      const formatHint = isAc ? `Format: AC${nextIndex}: [Inhalt]` : isFlow ? `Format: ${nextIndex}. [Schritt/Step]` : 'Kurzer, prägnanter Satz.';
+      const formatHint = isAc ? `Format: AC${nextIndex}: [Inhalt]` : isFlow ? (lang === 'de' ? 'Nur der Schritttext, KEIN Nummernprefix (z.B. "User öffnet..." nicht "1. User öffnet...")' : 'Step text only, NO number prefix (e.g. "User opens..." not "1. User opens...")') : 'Kurzer, prägnanter Satz.';
       const isReplace = replaceAtIndex !== undefined;
       const existingHint = isReplace
         ? (lang === 'de' ? `Ersetze den Punkt an Position ${replaceAtIndex! + 1}. Andere Punkte: ` : `Replace item at position ${replaceAtIndex! + 1}. Other items: `)
@@ -924,10 +929,10 @@ function parseAIResponse(
         voraussetzungen: toStrArr(parsed.voraussetzungen),
         nutzerflows: {
           happyFlow: Array.isArray((parsed.nutzerflows as Record<string, unknown>)?.happyFlow)
-            ? (parsed.nutzerflows as { happyFlow: string[] }).happyFlow
+            ? (parsed.nutzerflows as { happyFlow: string[] }).happyFlow.map(stripFlowStepNumber)
             : [],
           fehlerszenario: Array.isArray((parsed.nutzerflows as Record<string, unknown>)?.fehlerszenario)
-            ? (parsed.nutzerflows as { fehlerszenario: string[] }).fehlerszenario
+            ? (parsed.nutzerflows as { fehlerszenario: string[] }).fehlerszenario.map(stripFlowStepNumber)
             : undefined,
         },
         anhaenge: toStrArr(parsed.anhaenge),
@@ -949,10 +954,10 @@ function parseAIResponse(
         prerequisites: toStrArr(parsed.prerequisites),
         userFlows: {
           happyPath: Array.isArray((parsed.userFlows as Record<string, unknown>)?.happyPath)
-            ? (parsed.userFlows as { happyPath: string[] }).happyPath
+            ? (parsed.userFlows as { happyPath: string[] }).happyPath.map(stripFlowStepNumber)
             : [],
           errorScenario: Array.isArray((parsed.userFlows as Record<string, unknown>)?.errorScenario)
-            ? (parsed.userFlows as { errorScenario: string[] }).errorScenario
+            ? (parsed.userFlows as { errorScenario: string[] }).errorScenario.map(stripFlowStepNumber)
             : undefined,
         },
         resources: toStrArr(parsed.resources),

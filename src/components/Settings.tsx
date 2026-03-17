@@ -139,6 +139,7 @@ export function Settings({
   const [font, setFont] = useState<FontOption>(settings?.font ?? 'source-sans-3');
   const [defaultProject, setDefaultProject] = useState<ProjectType>(settings?.defaultProject ?? 'aokn');
   const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
+  const [markdownIncludeImages, setMarkdownIncludeImages] = useState(settings?.markdownIncludeImages !== false);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
@@ -169,6 +170,7 @@ export function Settings({
       setFont(settings.font ?? 'source-sans-3');
       setDefaultProject(settings.defaultProject ?? 'aokn');
       setShowProjectOption(settings.showProjectOption ?? true);
+      setMarkdownIncludeImages(settings.markdownIncludeImages !== false);
       setPromptTemplates(settings.promptTemplates ?? []);
     }
   }, [settings]);
@@ -219,6 +221,7 @@ export function Settings({
       font,
       defaultProject,
       showProjectOption,
+      markdownIncludeImages,
       promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
     };
     onSettingsChange(next);
@@ -641,6 +644,25 @@ export function Settings({
             </Button>
           </DialogActions>
         </Dialog>
+
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Markdown (Jira/Confluence)
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={markdownIncludeImages}
+                onChange={(e) => setMarkdownIncludeImages(e.target.checked)}
+              />
+            }
+            label="Design-Bilder standardmäßig einbinden"
+            sx={{ display: 'block', mb: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Beim Kopieren des Markdowns werden Bilder als Base64 eingebettet. Deaktivieren für Jira (unterstützt keine Base64-Bilder).
+          </Typography>
+        </Box>
 
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
