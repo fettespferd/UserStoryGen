@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType, DetailLevel } from '../types/story';
 import { generateId } from '../utils/templates';
 import { stripFlowStepNumber } from '../utils/format';
 
@@ -39,6 +39,29 @@ function getSystemPrompt(lang: 'de' | 'en', customDE?: string, customEN?: string
   const custom = lang === 'de' ? customDE : customEN;
   if (custom?.trim()) return custom.trim();
   return getDefaultSystemPrompt(lang);
+}
+
+function getDetailInstruction(detailLevel: DetailLevel, type: 'user-story' | 'bug'): string {
+  if (type === 'user-story') {
+    switch (detailLevel) {
+      case 'compact':
+        return 'Detaillierungsgrad: Kompakt. Erstelle 5–7 Akzeptanzkriterien, knappe User Flows.';
+      case 'standard':
+        return 'Detaillierungsgrad: Standard. Erstelle 8–12 Akzeptanzkriterien.';
+      case 'detailed':
+      default:
+        return 'Detaillierungsgrad: Ausführlich. Erstelle mindestens 15 Akzeptanzkriterien. Deck alle Randfälle, Fehlerszenarien, Validierungen und nicht-funktionale Aspekte (UX, Performance, Sicherheit, Barrierefreiheit) ab. Ausführliche User Flows mit allen relevanten Szenarien.';
+    }
+  }
+  switch (detailLevel) {
+    case 'compact':
+      return 'Detaillierungsgrad: Kompakt. Fokussiere auf die Hauptschritte zur Reproduktion.';
+    case 'standard':
+      return 'Detaillierungsgrad: Standard.';
+    case 'detailed':
+    default:
+      return 'Detaillierungsgrad: Ausführlich. Sehr detaillierte Schritte zur Reproduktion, alle technischen Details, betroffene Varianten und Randfälle.';
+  }
 }
 
 function mergeToLinks(de?: { anhaenge?: string[]; jiraTicket?: string }, en?: { resources?: string[] }): string[] {
@@ -102,7 +125,8 @@ export interface UseAIGeneratorReturn {
     type: 'user-story' | 'bug',
     settings: Settings | null,
     images?: string[],
-    project?: ProjectType
+    project?: ProjectType,
+    detailLevel?: DetailLevel
   ) => Promise<StoryItem | null>;
   regenerateSection: (
     lang: 'de' | 'en',
@@ -165,7 +189,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       type: 'user-story-de' | 'user-story-en' | 'bug-de' | 'bug-en',
       settings: Settings,
       images?: string[],
-      options?: { promptPrefix?: string }
+      options?: { promptPrefix?: string; detailLevel?: DetailLevel; genType?: 'user-story' | 'bug' }
     ): Promise<UserStoryDE | UserStoryEN | BugReportContent | null> => {
       const lang = type.includes('de') ? 'de' : 'en';
       const systemPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
@@ -174,9 +198,12 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       else if (type === 'user-story-en') schema = USER_STORY_EN_SCHEMA;
       else schema = BUG_SCHEMA;
       const prefix = options?.promptPrefix ?? 'Erstelle basierend auf folgender Beschreibung:';
+      const detailInstruction = options?.detailLevel && options?.genType
+        ? `${getDetailInstruction(options.detailLevel, options.genType)}\n\n`
+        : '';
       const basePrompt = images?.length
-        ? `Analysiere die angehängten Design-Bilder und erstelle basierend darauf sowie folgender Beschreibung:\n\n${prompt || '(Keine zusätzliche Beschreibung)'}`
-        : `${prefix}\n\n${prompt}`;
+        ? `${detailInstruction}Analysiere die angehängten Design-Bilder und erstelle basierend darauf sowie folgender Beschreibung:\n\n${prompt || '(Keine zusätzliche Beschreibung)'}`
+        : `${detailInstruction}${prefix}\n\n${prompt}`;
       const userPrompt = `${basePrompt}\n\nAntworte mit JSON im folgenden Schema (id wird automatisch gesetzt):\n${schema}`;
       const userContent = images?.length ? buildMessageContent(userPrompt, images) : userPrompt;
 
@@ -249,7 +276,8 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       type: 'user-story' | 'bug',
       settings: Settings | null,
       images?: string[],
-      project?: ProjectType
+      project?: ProjectType,
+      detailLevel: DetailLevel = 'standard'
     ): Promise<StoryItem | null> => {
       if (!settings) return null;
       const apiKey = settings.provider === 'openai'
@@ -263,10 +291,11 @@ export function useAIGenerator(): UseAIGeneratorReturn {
       const fullPrompt = projectPrefix + prompt;
       setIsLoading(true);
       setError(null);
+      const genOptions = { detailLevel, genType: type };
       try {
         if (type === 'user-story') {
-          const deResult = await generateSingle(fullPrompt, 'user-story-de', settings, images) as UserStoryDE | null;
-          const enResult = await generateSingle(fullPrompt, 'user-story-en', settings, images) as UserStoryEN | null;
+          const deResult = await generateSingle(fullPrompt, 'user-story-de', settings, images, genOptions) as UserStoryDE | null;
+          const enResult = await generateSingle(fullPrompt, 'user-story-en', settings, images, genOptions) as UserStoryEN | null;
           if (!deResult || !enResult) return null;
           const id = generateId();
           const title =
@@ -307,8 +336,8 @@ export function useAIGenerator(): UseAIGeneratorReturn {
           };
           return userStory;
         }
-        const deBug = (await generateSingle(fullPrompt, 'bug-de', settings, images)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
-        const enBug = (await generateSingle(fullPrompt, 'bug-en', settings, images)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        const deBug = (await generateSingle(fullPrompt, 'bug-de', settings, images, genOptions)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
+        const enBug = (await generateSingle(fullPrompt, 'bug-en', settings, images, genOptions)) as { title: string; description: string; expectedResult: string; actualResult: string; stepsToReproduce: string[]; technicalDetails: string; severityPriority: string; resources: string; outOfScope: string } | null;
         if (!deBug || !enBug) return null;
         const id = generateId();
         const bugReport: BugReport = {

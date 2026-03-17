@@ -30,7 +30,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ClearIcon from '@mui/icons-material/Clear';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import type { Settings, StoryItem, ProjectType, TicketTypeChoice, CopyBookEntry } from '../types/story';
+import type { Settings, StoryItem, ProjectType, TicketTypeChoice, CopyBookEntry, DetailLevel } from '../types/story';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { getPromptTemplates } from '../utils/templates';
 import { useSnackbar } from '../contexts/SnackbarContext';
@@ -63,6 +63,7 @@ function fileToDataUrl(file: File): Promise<string> {
 export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const snackbar = useSnackbar();
   const [selectedType, setSelectedType] = useState<TicketTypeChoice>('user-story');
+  const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
   const defaultProject = settings?.defaultProject ?? 'aokn';
   const showProjectOption = settings?.showProjectOption ?? true;
   const [project, setProject] = useState<ProjectType>(defaultProject);
@@ -135,7 +136,8 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
       selectedType,
       settings,
       images.length ? images : undefined,
-      projectToUse
+      projectToUse,
+      detailLevel
     );
     if (result) {
       onGenerated(result);
@@ -204,6 +206,32 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           <ToggleButton value="copy-table">Copy Tabelle</ToggleButton>
         </ToggleButtonGroup>
       </Box>
+
+      {selectedType !== 'copy-table' && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+            Detaillierungsgrad
+          </Typography>
+          <ToggleButtonGroup
+            value={detailLevel}
+            exclusive
+            onChange={(_, v) => v && setDetailLevel(v)}
+            fullWidth
+            size="small"
+            sx={{
+              bgcolor: 'action.hover',
+              borderRadius: 1.5,
+              p: 0.5,
+              '& .MuiToggleButton-root': { border: 'none', py: 1, textTransform: 'none', fontWeight: 600 },
+              '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText' },
+            }}
+          >
+            <ToggleButton value="compact" sx={{ fontSize: '0.8rem' }}>Kompakt (5–7 ACs)</ToggleButton>
+            <ToggleButton value="standard" sx={{ fontSize: '0.8rem' }}>Standard (8–12)</ToggleButton>
+            <ToggleButton value="detailed" sx={{ fontSize: '0.8rem' }}>Ausführlich (15+ ACs)</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
 
       {showProjectOption && selectedType !== 'copy-table' && (
         <Box sx={{ mb: 2 }}>

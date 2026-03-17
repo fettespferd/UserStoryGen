@@ -5,6 +5,9 @@ export type TicketType = 'user-story' | 'bug-report';
 /** Auswahl für KI-Generierung: User Story, Bug Report oder Copy Tabelle. */
 export type TicketTypeChoice = 'user-story' | 'bug' | 'copy-table';
 
+/** Detaillierungsgrad bei der KI-Generierung: beeinflusst Anzahl der ACs und Umfang der Flows. */
+export type DetailLevel = 'compact' | 'standard' | 'detailed';
+
 export type ProjectType = 'aokn' | 'healthmatch';
 
 export type StoryItem = UserStory | BugReport;
