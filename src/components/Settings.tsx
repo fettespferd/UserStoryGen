@@ -140,6 +140,7 @@ export function Settings({
   const [defaultProject, setDefaultProject] = useState<ProjectType>(settings?.defaultProject ?? 'aokn');
   const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
   const [markdownIncludeImages, setMarkdownIncludeImages] = useState(settings?.markdownIncludeImages !== false);
+  const [markdownIncludeCopyBook, setMarkdownIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
@@ -171,6 +172,7 @@ export function Settings({
       setDefaultProject(settings.defaultProject ?? 'aokn');
       setShowProjectOption(settings.showProjectOption ?? true);
       setMarkdownIncludeImages(settings.markdownIncludeImages !== false);
+      setMarkdownIncludeCopyBook(settings.markdownIncludeCopyBook !== false);
       setPromptTemplates(settings.promptTemplates ?? []);
     }
   }, [settings]);
@@ -222,6 +224,7 @@ export function Settings({
       defaultProject,
       showProjectOption,
       markdownIncludeImages,
+      markdownIncludeCopyBook,
       promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
     };
     onSettingsChange(next);
@@ -661,6 +664,19 @@ export function Settings({
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
             Beim Kopieren des Markdowns werden Bilder als Base64 eingebettet. Deaktivieren für Jira (unterstützt keine Base64-Bilder).
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={markdownIncludeCopyBook}
+                onChange={(e) => setMarkdownIncludeCopyBook(e.target.checked)}
+              />
+            }
+            label="Copy-Book-Tabelle (UI-Texte) standardmäßig einbinden"
+            sx={{ display: 'block' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Tabelle mit Element, Text DE, Text EN für ein Copy-Paste zu Jira.
           </Typography>
         </Box>
 

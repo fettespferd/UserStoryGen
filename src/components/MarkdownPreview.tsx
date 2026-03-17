@@ -54,8 +54,9 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const suggestedTenant = projectToTenant(project);
   const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(() => suggestedTenant ?? settings?.markdownLinkTenant ?? 'none');
   const hasImages = item?.type === 'user-story' && (item as UserStory).images?.length > 0;
-  const defaultIncludeImages = settings?.markdownIncludeImages !== false;
-  const [includeImages, setIncludeImages] = useState(defaultIncludeImages);
+  const hasCopyBook = item?.type === 'user-story' && (item as UserStory).copyBook?.length > 0;
+  const [includeImages, setIncludeImages] = useState(settings?.markdownIncludeImages !== false);
+  const [includeCopyBook, setIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
 
   useEffect(() => {
     if (suggestedTenant) {
@@ -65,22 +66,35 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
 
   useEffect(() => {
     setIncludeImages(settings?.markdownIncludeImages !== false);
-  }, [settings?.markdownIncludeImages, item?.id]);
+    setIncludeCopyBook(settings?.markdownIncludeCopyBook !== false);
+  }, [settings?.markdownIncludeImages, settings?.markdownIncludeCopyBook, item?.id]);
 
   const handleCopy = useCallback(() => {
     if (!item) return;
     const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
-    let md = toMarkdown(item, activeLang, { headingLevel, images: imagesOpt });
+    const copyBookOpt = hasCopyBook && includeCopyBook ? (item as UserStory).copyBook : undefined;
+    let md = toMarkdown(item, activeLang, {
+      headingLevel,
+      images: imagesOpt,
+      includeCopyBook: !!copyBookOpt,
+      copyBook: copyBookOpt,
+    });
     const link = getAccessibilityLink(linkTenant, settings, lang);
     md = appendAccessibilitySection(md, headingLevel, lang, link);
     navigator.clipboard.writeText(md);
     onCopy?.();
-  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages]);
+  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages, hasCopyBook, includeCopyBook]);
 
   if (!item) return null;
 
   const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
-  let md = toMarkdown(item, activeLang, { headingLevel, images: imagesOpt });
+  const copyBookOpt = hasCopyBook && includeCopyBook ? (item as UserStory).copyBook : undefined;
+  let md = toMarkdown(item, activeLang, {
+    headingLevel,
+    images: imagesOpt,
+    includeCopyBook: !!copyBookOpt,
+    copyBook: copyBookOpt,
+  });
   const link = getAccessibilityLink(linkTenant, settings, lang);
   md = appendAccessibilitySection(md, headingLevel, lang, link);
   const title =
@@ -154,6 +168,18 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
                 />
               }
               label="Bilder einbinden"
+            />
+          )}
+          {hasCopyBook && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeCopyBook}
+                  onChange={(e) => setIncludeCopyBook(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Copy-Book-Tabelle einbinden"
             />
           )}
           <Button

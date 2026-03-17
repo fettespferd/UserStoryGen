@@ -29,6 +29,37 @@ describe('toMarkdown', () => {
     expect(md).toContain('- Nichts');
   });
 
+  it('includes Copy Book section when UserStory has copyBook', () => {
+    const story: UserStory = {
+      id: '1',
+      type: 'user-story',
+      title: 'Test',
+      de: {
+        beschreibung: 'Beschreibung',
+        akzeptanzkriterien: ['AC1: Test'],
+        voraussetzungen: [],
+        nutzerflows: { happyFlow: ['1. Step'] },
+        outOfScope: [],
+      },
+      en: {
+        description: 'Description',
+        acceptanceCriteria: ['AC1: Test'],
+        todos: { be: [], fe: [], qa: [] },
+        roles: 'User',
+        prerequisites: [],
+        userFlows: { happyPath: ['1. Step'] },
+        outOfScope: [],
+      },
+      links: [],
+      copyBook: [{ elementName: 'Button', textDE: 'Speichern', textEN: 'Save' }],
+      images: [],
+    };
+    const md = toMarkdown(story, 'de');
+    expect(md).toContain('📋 Copy Book (UI-Texte)');
+    expect(md).toContain('| Element | Text DE | Text EN |');
+    expect(md).toContain('| Button | Speichern | Save |');
+  });
+
   it('includes Design-Bilder section when UserStory has images', () => {
     const story: UserStory = {
       id: '1',

@@ -256,6 +256,8 @@ export interface Settings {
   markdownLinkTenant?: MarkdownLinkTenant;
   /** Standard: Design-Bilder beim Markdown-Kopieren einbinden. false = Bilder aus (z.B. für Jira). */
   markdownIncludeImages?: boolean;
+  /** Standard: Copy-Book-Tabelle (UI-Texte) beim Markdown-Kopieren einbinden. */
+  markdownIncludeCopyBook?: boolean;
   /** @deprecated Migration: Nutze backgroundImage + backgroundColor. */
   background?: BackgroundOption;
   /** Bild-Asset für Hintergrund (null/undefined = kein Bild). Kann mit backgroundColor kombiniert werden. */

@@ -4,6 +4,7 @@ import type {
   UserStory,
   BugReport,
   MarkdownHeadingLevel,
+  CopyBookEntry,
 } from '../types/story';
 import { stripAcPrefix, stripFlowStepNumber } from './format';
 
@@ -22,6 +23,9 @@ export interface MarkdownOptions {
   headingLevel?: MarkdownHeadingLevel;
   /** Design-Bilder (base64 data URLs) – werden als Markdown-Bilder eingefügt */
   images?: string[];
+  /** Copy-Book-Tabelle (Element, DE, EN) einbinden */
+  includeCopyBook?: boolean;
+  copyBook?: CopyBookEntry[];
 }
 
 export function toMarkdown(
@@ -31,18 +35,20 @@ export function toMarkdown(
 ): string {
   const h = options?.headingLevel ?? 'h3';
   const images = options?.images ?? (item.type === 'user-story' ? (item as UserStory).images : undefined);
+  const includeCopyBook = options?.includeCopyBook ?? true;
+  const copyBook = options?.copyBook ?? (item.type === 'user-story' ? (item as UserStory).copyBook : undefined);
   if (item.type === 'bug-report') return bugReportToMarkdown(item, activeLang ?? 'de', h);
   if (item.type === 'user-story') {
     const lang = activeLang ?? 'de';
     return lang === 'de'
-      ? userStoryDEToMarkdown(item.de, h, item.links, images)
-      : userStoryENToMarkdown(item.en, h, item.links, images);
+      ? userStoryDEToMarkdown(item.de, h, item.links, images, includeCopyBook ? copyBook : undefined)
+      : userStoryENToMarkdown(item.en, h, item.links, images, includeCopyBook ? copyBook : undefined);
   }
   if (item.type === 'user-story-de') {
     const legacyLinks = [...(item.anhaenge ?? []), ...(item.jiraTicket?.trim() ? [item.jiraTicket] : [])];
-    return userStoryDEToMarkdown(item, h, legacyLinks);
+    return userStoryDEToMarkdown(item, h, legacyLinks, undefined, undefined);
   }
-  if (item.type === 'user-story-en') return userStoryENToMarkdown(item, h, item.resources ?? []);
+  if (item.type === 'user-story-en') return userStoryENToMarkdown(item, h, item.resources ?? [], undefined, undefined);
   return '';
 }
 
@@ -126,11 +132,31 @@ function appendImagesSection(lines: string[], h: MarkdownHeadingLevel, images: s
   });
 }
 
+function copyBookToMarkdownTable(entries: CopyBookEntry[]): string {
+  if (!entries?.length) return '';
+  const header = '| Element | Text DE | Text EN |';
+  const separator = '| --- | --- | --- |';
+  const rows = entries.map(
+    (e) => `| ${e.elementName.replace(/\|/g, '\\|')} | ${e.textDE.replace(/\|/g, '\\|')} | ${e.textEN.replace(/\|/g, '\\|')} |`
+  );
+  return [header, separator, ...rows].join('\n');
+}
+
+function appendCopyBookSection(lines: string[], h: MarkdownHeadingLevel, copyBook: CopyBookEntry[] | undefined, labelDE: string, labelEN: string, lang: 'de' | 'en'): void {
+  if (!copyBook?.length) return;
+  const label = lang === 'de' ? labelDE : labelEN;
+  lines.push('');
+  lines.push(heading(h, label));
+  lines.push('');
+  lines.push(copyBookToMarkdownTable(copyBook));
+}
+
 function userStoryDEToMarkdown(
   story: UserStoryDE | import('../types/story').UserStoryDEContent,
   h: MarkdownHeadingLevel,
   links?: string[],
-  images?: string[]
+  images?: string[],
+  copyBook?: CopyBookEntry[]
 ): string {
   const lines: string[] = [];
 
@@ -162,6 +188,7 @@ function userStoryDEToMarkdown(
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
   appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'de');
+  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'de');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
@@ -174,7 +201,8 @@ function userStoryENToMarkdown(
   story: UserStoryEN | import('../types/story').UserStoryENContent,
   h: MarkdownHeadingLevel,
   links?: string[],
-  images?: string[]
+  images?: string[],
+  copyBook?: CopyBookEntry[]
 ): string {
   const lines: string[] = [];
 
@@ -218,6 +246,7 @@ function userStoryENToMarkdown(
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
   appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'en');
+  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'en');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
