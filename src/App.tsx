@@ -155,6 +155,26 @@ function AppContent({
   const [sortBy, setSortBy] = useState<'date' | 'title'>('date');
   const [filterType, setFilterType] = useState<'all' | 'user-story' | 'bug-report'>('all');
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  const handleSaveStory = useCallback(async () => {
+    const item = store.currentItem;
+    if (!item || !storage.hasAccess) {
+      if (!storage.hasAccess && storage.isSupported) {
+        snackbar.showError('Ordner auswählen (Einstellungen), um zu speichern');
+      }
+      return;
+    }
+    setSaveLoading(true);
+    try {
+      await storage.saveStory(item);
+      snackbar.showSuccess('Story gespeichert');
+    } catch (err) {
+      snackbar.showError('Speichern fehlgeschlagen: ' + (err instanceof Error ? err.message : 'Unbekannter Fehler'));
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [store.currentItem, storage, snackbar]);
 
   useEffect(() => {
     if (storage.hasAccess) {
@@ -501,6 +521,9 @@ function AppContent({
                       ai={ai}
                       settings={settings}
                       onDelete={handleDelete}
+                      onSave={handleSaveStory}
+                      saveLoading={saveLoading}
+                      hasStorageAccess={storage.hasAccess}
                       activeLangTab={storyLangTab}
                       onActiveLangTabChange={setStoryLangTab}
                     />
@@ -512,6 +535,9 @@ function AppContent({
                       ai={ai}
                       settings={settings}
                       onDelete={handleDelete}
+                      onSave={handleSaveStory}
+                      saveLoading={saveLoading}
+                      hasStorageAccess={storage.hasAccess}
                       activeLangTab={bugLangTab}
                       onActiveLangTabChange={setBugLangTab}
                     />

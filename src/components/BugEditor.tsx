@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab } from '@mui/material';
+import { Box, Paper, Typography, IconButton, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { EditableField } from './EditableField';
@@ -15,6 +16,9 @@ interface BugEditorProps {
   ai: UseAIGeneratorReturn;
   settings?: Settings | null;
   onDelete?: (id: string) => void;
+  onSave?: () => Promise<void>;
+  saveLoading?: boolean;
+  hasStorageAccess?: boolean;
   activeLangTab?: number;
   onActiveLangTabChange?: (tab: number) => void;
 }
@@ -56,7 +60,7 @@ const LABELS_EN = {
   addImages: 'Add images',
 };
 
-export function BugEditor({ item, store, ai, settings, onDelete, activeLangTab = 0, onActiveLangTabChange }: BugEditorProps) {
+export function BugEditor({ item, store, ai, settings, onDelete, onSave, saveLoading, hasStorageAccess, activeLangTab = 0, onActiveLangTabChange }: BugEditorProps) {
   const { updateBugReportField, updateBugReportArrayField, updateBugReportImages } = store;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fullRegenOpen, setFullRegenOpen] = useState(false);
@@ -113,6 +117,18 @@ export function BugEditor({ item, store, ai, settings, onDelete, activeLangTab =
               placeholder={lang === 'de' ? 'Titel' : 'Title'}
               sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
             />
+            {onSave && (
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={saveLoading ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                onClick={onSave}
+                disabled={saveLoading || !hasStorageAccess}
+                sx={{ flexShrink: 0 }}
+              >
+                {saveLoading ? 'Speichern…' : 'Speichern'}
+              </Button>
+            )}
             <Button
               size="small"
               startIcon={<AutoAwesomeIcon />}

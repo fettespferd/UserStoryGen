@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Box, Paper, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import { Box, Paper, Typography, IconButton, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import TranslateIcon from '@mui/icons-material/Translate';
@@ -16,6 +17,7 @@ import type { UserStory } from '../types/story';
 import type { UseStoryStoreReturn } from '../hooks/useStoryStore';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import type { Settings } from '../types/story';
+import { useSnackbar } from '../contexts/SnackbarContext';
 
 interface StoryEditorProps {
   item: UserStory | null;
@@ -23,6 +25,9 @@ interface StoryEditorProps {
   ai: UseAIGeneratorReturn;
   settings: Settings | null;
   onDelete?: (id: string) => void;
+  onSave?: () => Promise<void>;
+  saveLoading?: boolean;
+  hasStorageAccess?: boolean;
   /** Kontrollierter Tab: 0 = Deutsch, 1 = English. Wenn nicht gesetzt, wird interner State verwendet. */
   activeLangTab?: number;
   onActiveLangTabChange?: (tab: number) => void;
@@ -537,7 +542,8 @@ function StoryLangEditor({
   );
 }
 
-export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab, onActiveLangTabChange }: StoryEditorProps) {
+export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveLoading, hasStorageAccess, activeLangTab, onActiveLangTabChange }: StoryEditorProps) {
+  const snackbar = useSnackbar();
   const [internalTab, setInternalTab] = useState(0);
   const tab = activeLangTab ?? internalTab;
   const setTab = onActiveLangTabChange ?? setInternalTab;
@@ -574,6 +580,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
     if (updated) {
       store.setCurrentItem(updated);
       store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
+      snackbar.showSuccess('DE → EN übertragen');
     }
   };
 
@@ -592,6 +599,18 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
               placeholder={tab === 0 ? 'Titel (DE)' : 'Title (EN)'}
               sx={{ flex: 1, minWidth: 240, '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' } }}
             />
+            {onSave && (
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={saveLoading ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                onClick={onSave}
+                disabled={saveLoading || !hasStorageAccess}
+                sx={{ flexShrink: 0 }}
+              >
+                {saveLoading ? 'Speichern…' : 'Speichern'}
+              </Button>
+            )}
             <Button
               size="small"
               startIcon={<AutoAwesomeIcon />}
@@ -639,7 +658,7 @@ export function StoryEditor({ item, store, ai, settings, onDelete, activeLangTab
           <Button
             size="small"
             variant="outlined"
-            startIcon={ai.isLoading ? undefined : <TranslateIcon />}
+            startIcon={ai.isLoading ? <CircularProgress size={18} color="inherit" /> : <TranslateIcon />}
             onClick={handleSyncDEToEN}
             disabled={!hasApiKey || ai.isLoading}
           >
