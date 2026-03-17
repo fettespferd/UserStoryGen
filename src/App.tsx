@@ -359,6 +359,8 @@ function App() {
             <Box
               sx={{
                 flex: isMobile ? 'none' : '0 0 280px',
+                minWidth: isMobile ? undefined : 280,
+                width: isMobile ? undefined : 280,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 2,

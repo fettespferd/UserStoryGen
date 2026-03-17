@@ -14,14 +14,35 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ClearIcon from '@mui/icons-material/Clear';
-import type { Settings, StoryItem, ProjectType, TicketTypeChoice } from '../types/story';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import type { Settings, StoryItem, ProjectType, TicketTypeChoice, CopyBookEntry } from '../types/story';
 import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { getPromptTemplates } from '../utils/templates';
+
+function toMarkdownTable(entries: CopyBookEntry[]): string {
+  if (entries.length === 0) return '';
+  const header = '| Element | Text DE | Text EN |';
+  const separator = '| --- | --- | --- |';
+  const rows = entries.map(
+    (e) => `| ${e.elementName} | ${e.textDE.replace(/\|/g, '\\|')} | ${e.textEN.replace(/\|/g, '\\|')} |`
+  );
+  return [header, separator, ...rows].join('\n');
+}
 
 interface AIGeneratorProps {
   ai: UseAIGeneratorReturn;
@@ -47,6 +68,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const [images, setImages] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [copyResultDialog, setCopyResultDialog] = useState<CopyBookEntry[] | null>(null);
 
   useEffect(() => {
     setProject(defaultProject);
@@ -96,6 +118,14 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   };
 
   const handleGenerate = async () => {
+    if (selectedType === 'copy-table') {
+      if (!images.length || !settings) return;
+      const extracted = await ai.extractCopyBook(images, settings);
+      if (extracted?.length) {
+        setCopyResultDialog(extracted);
+      }
+      return;
+    }
     if (!prompt.trim()) return;
     const projectToUse = showProjectOption ? project : defaultProject;
     const result = await ai.generate(
@@ -113,7 +143,9 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const hasApiKey = Boolean(
     settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey
   );
-  const canGenerate = hasApiKey && prompt.trim().length > 0;
+  const canGenerate =
+    hasApiKey &&
+    (selectedType === 'copy-table' ? images.length > 0 : prompt.trim().length > 0);
   const promptTemplates = getPromptTemplates(settings?.promptTemplates);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
@@ -127,6 +159,9 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
       elevation={0}
       sx={{
         p: 3,
+        width: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
         bgcolor: 'background.paper',
         borderRadius: 2,
         border: '1px solid',
@@ -135,7 +170,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
     >
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <AddCircleOutlineIcon sx={{ color: 'primary.main', fontSize: 22 }} />
-        Neue Story erstellen
+        {selectedType === 'copy-table' ? 'Copy Tabelle' : 'Neue Story erstellen'}
       </Typography>
 
       {!hasApiKey && (
@@ -164,10 +199,11 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         >
           <ToggleButton value="user-story">User Story</ToggleButton>
           <ToggleButton value="bug">Bug Report</ToggleButton>
+          <ToggleButton value="copy-table">Copy Tabelle</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
-      {showProjectOption && (
+      {showProjectOption && selectedType !== 'copy-table' && (
         <Box sx={{ mb: 2 }}>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
             Projekt
@@ -207,7 +243,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         onDrop={handleDrop}
       >
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          Design-Bilder (optional)
+          {selectedType === 'copy-table' ? 'Design-Bilder (erforderlich)' : 'Design-Bilder (optional)'}
         </Typography>
         <input
           ref={fileInputRef}
@@ -266,6 +302,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         )}
       </Box>
 
+      {selectedType !== 'copy-table' && (
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -282,8 +319,8 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
             </Button>
           )}
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', minWidth: 0 }}>
-          <FormControl size="small" sx={{ width: 240, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <FormControl size="small" fullWidth>
             <InputLabel>Vorlage</InputLabel>
             <Select
               value={selectedTemplateId || promptTemplates[0]?.id || ''}
@@ -311,7 +348,9 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           </Button>
         </Box>
       </Box>
+      )}
 
+      {selectedType !== 'copy-table' && (
       <TextField
         label="Beschreibung / Stichpunkte"
         value={prompt}
@@ -323,6 +362,13 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         placeholder="z.B.: Als Patient möchte ich meine Termine online buchen können..."
         sx={{ mb: 2 }}
       />
+      )}
+
+      {selectedType === 'copy-table' && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Lade Design-Bilder hoch und klicke auf Generieren. Die UI-Texte werden extrahiert – ohne User Story.
+        </Typography>
+      )}
 
       <Button
         variant="contained"
@@ -332,7 +378,13 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
         disabled={!canGenerate || ai.isLoading}
         sx={{ py: 1.5 }}
       >
-        {ai.isLoading ? 'Wird erstellt…' : 'Story erstellen'}
+        {ai.isLoading
+          ? selectedType === 'copy-table'
+            ? 'Wird extrahiert…'
+            : 'Wird erstellt…'
+          : selectedType === 'copy-table'
+            ? 'Copy Tabelle generieren'
+            : 'Story erstellen'}
       </Button>
 
       {ai.error && (
@@ -340,6 +392,55 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           {ai.error}
         </Alert>
       )}
+
+      <Dialog
+        open={copyResultDialog !== null}
+        onClose={() => setCopyResultDialog(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle>Copy Tabelle – generiert</DialogTitle>
+        <DialogContent>
+          {copyResultDialog && copyResultDialog.length > 0 && (
+            <TableContainer sx={{ maxHeight: 360, border: '1px solid', borderColor: 'divider', borderRadius: 1, mt: 1 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Element</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Text DE</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Text EN</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {copyResultDialog.map((entry, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{entry.elementName}</TableCell>
+                      <TableCell>{entry.textDE}</TableCell>
+                      <TableCell>{entry.textEN}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<ContentCopyIcon />}
+            onClick={() => {
+              if (copyResultDialog?.length) {
+                navigator.clipboard.writeText(toMarkdownTable(copyResultDialog));
+              }
+            }}
+            disabled={!copyResultDialog?.length}
+          >
+            Als Tabelle kopieren
+          </Button>
+          <Button onClick={() => setCopyResultDialog(null)}>Schließen</Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }

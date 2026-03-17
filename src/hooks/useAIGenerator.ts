@@ -109,6 +109,14 @@ export interface UseAIGeneratorReturn {
     prompt: string,
     settings: Settings | null
   ) => Promise<string | string[] | null>;
+  generateSingleListItem: (
+    item: UserStory,
+    lang: 'de' | 'en',
+    section: string,
+    settings: Settings | null,
+    prompt?: string,
+    replaceAtIndex?: number
+  ) => Promise<string | null>;
   regenerateFullStory: (
     item: UserStory,
     prompt: string,
@@ -713,6 +721,110 @@ Keine anderen Texte.`;
     []
   );
 
+  const getListForSection = (item: UserStory, lang: 'de' | 'en', section: string): string[] => {
+    const content = lang === 'de' ? item.de : item.en;
+    const obj = content as unknown as Record<string, unknown>;
+    if (section.includes('.')) {
+      const [field, subField] = section.split('.');
+      const nested = obj[field] as Record<string, unknown> | undefined;
+      return (nested?.[subField] as string[]) ?? [];
+    }
+    return (obj[section] as string[]) ?? [];
+  };
+
+  const generateSingleListItem = useCallback(
+    async (
+      item: UserStory,
+      lang: 'de' | 'en',
+      section: string,
+      settings: Settings | null,
+      prompt?: string,
+      replaceAtIndex?: number
+    ): Promise<string | null> => {
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+
+      const existingList = getListForSection(item, lang, section);
+      const nextIndex = replaceAtIndex !== undefined ? replaceAtIndex + 1 : existingList.length + 1;
+      const otherItems = replaceAtIndex !== undefined ? existingList.filter((_, i) => i !== replaceAtIndex) : existingList;
+
+      const sectionLabels: Record<string, { de: string; en: string }> = {
+        akzeptanzkriterien: { de: 'Akzeptanzkriterium', en: 'Acceptance criterion' },
+        acceptanceCriteria: { de: 'Akzeptanzkriterium', en: 'Acceptance criterion' },
+        'nutzerflows.happyFlow': { de: 'Happy-Flow-Schritt', en: 'Happy path step' },
+        'nutzerflows.fehlerszenario': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
+        'userFlows.happyPath': { de: 'Happy-Flow-Schritt', en: 'Happy path step' },
+        'userFlows.errorScenario': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
+        voraussetzungen: { de: 'Voraussetzung', en: 'Prerequisite' },
+        prerequisites: { de: 'Voraussetzung', en: 'Prerequisite' },
+        outOfScope: { de: 'Out-of-Scope-Punkt', en: 'Out-of-scope item' },
+      };
+      const label = sectionLabels[section]?.[lang] ?? 'Listenpunkt';
+      const isAc = section === 'akzeptanzkriterien' || section === 'acceptanceCriteria';
+      const isFlow = section.includes('Flow') || section.includes('flow') || section.includes('szenario') || section.includes('Scenario');
+      const formatHint = isAc ? `Format: AC${nextIndex}: [Inhalt]` : isFlow ? `Format: ${nextIndex}. [Schritt/Step]` : 'Kurzer, prägnanter Satz.';
+      const isReplace = replaceAtIndex !== undefined;
+      const existingHint = isReplace
+        ? (lang === 'de' ? `Ersetze den Punkt an Position ${replaceAtIndex! + 1}. Andere Punkte: ` : `Replace item at position ${replaceAtIndex! + 1}. Other items: `)
+        : (lang === 'de' ? 'Bestehende Punkte: ' : 'Existing items: ');
+      const context = buildStoryContext(item);
+      const userPrompt = lang === 'de'
+        ? `${isReplace ? 'Ersetze' : 'Erstelle'} genau EINEN ${label} für diese User Story. ${existingHint}${otherItems.join(' | ') || '(keine)'}. ${formatHint}. ${prompt ? `Zusätzliche Anweisung: ${prompt}` : ''}\n\n${context}\n\nAntworte NUR mit JSON: {"value":"..."} – nur der neue Punkt als value, kein anderer Text.`
+        : `${isReplace ? 'Replace' : 'Create'} exactly ONE ${label} for this user story. ${existingHint}${otherItems.join(' | ') || '(none)'}. ${formatHint}. ${prompt ? `Additional instruction: ${prompt}` : ''}\n\n${context}\n\nRespond ONLY with JSON: {"value":"..."} – only the new item as value, no other text.`;
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        const sysPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
+        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+        let text = '';
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: userPrompt }],
+              temperature: 0.3,
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.choices?.[0]?.message?.content?.trim() ?? '';
+        } else {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: modelAnthropic,
+              max_tokens: 512,
+              system: sysPrompt,
+              messages: [{ role: 'user', content: userPrompt }],
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.content?.[0]?.text?.trim() ?? '';
+        }
+        const match = text.match(/\{[^}]*"value"[^}]*\}/);
+        if (!match) return null;
+        const parsed = JSON.parse(match[0]) as { value?: string };
+        const value = parsed?.value;
+        return (typeof value === 'string' ? value.trim() : null) || null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
   const generatePromptFromDescription = useCallback(
     async (description: string, settings: Settings | null): Promise<string | null> => {
       if (!settings || !description.trim()) return null;
@@ -782,7 +894,7 @@ Der Output soll ein mehrzeiliger Text sein, den der User als Vorlage in ein Besc
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, generatePromptFromDescription, isLoading, error };
+  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, generatePromptFromDescription, generateSingleListItem, isLoading, error };
 }
 
 function parseAIResponse(

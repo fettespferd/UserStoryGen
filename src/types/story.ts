@@ -2,8 +2,8 @@
 
 export type TicketType = 'user-story' | 'bug-report';
 
-/** Auswahl für KI-Generierung: User Story oder Bug Report. */
-export type TicketTypeChoice = 'user-story' | 'bug';
+/** Auswahl für KI-Generierung: User Story, Bug Report oder Copy Tabelle. */
+export type TicketTypeChoice = 'user-story' | 'bug' | 'copy-table';
 
 export type ProjectType = 'aokn' | 'healthmatch';
 
