@@ -145,6 +145,9 @@ export function Settings({
   const [showProjectOption, setShowProjectOption] = useState(settings?.showProjectOption ?? true);
   const [markdownIncludeImages, setMarkdownIncludeImages] = useState(settings?.markdownIncludeImages !== false);
   const [markdownIncludeCopyBook, setMarkdownIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
+  const [markdownIncludeJiraTicket, setMarkdownIncludeJiraTicket] = useState(settings?.markdownIncludeJiraTicket !== false);
+  const [markdownIncludeTodos, setMarkdownIncludeTodos] = useState(settings?.markdownIncludeTodos !== false);
+  const [markdownIncludeEfforts, setMarkdownIncludeEfforts] = useState(settings?.markdownIncludeEfforts !== false);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
   const [saveLoading, setSaveLoading] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
@@ -178,6 +181,9 @@ export function Settings({
       setShowProjectOption(settings.showProjectOption ?? true);
       setMarkdownIncludeImages(settings.markdownIncludeImages !== false);
       setMarkdownIncludeCopyBook(settings.markdownIncludeCopyBook !== false);
+      setMarkdownIncludeJiraTicket(settings.markdownIncludeJiraTicket !== false);
+      setMarkdownIncludeTodos(settings.markdownIncludeTodos !== false);
+      setMarkdownIncludeEfforts(settings.markdownIncludeEfforts !== false);
       setPromptTemplates(settings.promptTemplates ?? []);
     }
   }, [settings]);
@@ -231,6 +237,9 @@ export function Settings({
       showProjectOption,
       markdownIncludeImages,
       markdownIncludeCopyBook,
+      markdownIncludeJiraTicket,
+      markdownIncludeTodos,
+      markdownIncludeEfforts,
       promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
     };
     onSettingsChange(next);
@@ -686,6 +695,42 @@ export function Settings({
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
             Tabelle mit Element, Text DE, Text EN für ein Copy-Paste zu Jira.
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={markdownIncludeJiraTicket}
+                onChange={(e) => setMarkdownIncludeJiraTicket(e.target.checked)}
+              />
+            }
+            label="Jira-Ticket-Abschnitt standardmäßig einbinden"
+            sx={{ display: 'block', mt: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Fügt einen Abschnitt „Jira Ticket“ unter Barrierefreiheit ins Markdown ein.
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={markdownIncludeTodos}
+                onChange={(e) => setMarkdownIncludeTodos(e.target.checked)}
+              />
+            }
+            label="To-Do's (BE/FE/QA) standardmäßig einbinden"
+            sx={{ display: 'block', mt: 1 }}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={markdownIncludeEfforts}
+                onChange={(e) => setMarkdownIncludeEfforts(e.target.checked)}
+              />
+            }
+            label="Aufwände (PD) standardmäßig einbinden"
+            sx={{ display: 'block', mt: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Diese Abschnitte können leer sein und werden per Haken optional ins Markdown einbezogen.
           </Typography>
         </Box>
 

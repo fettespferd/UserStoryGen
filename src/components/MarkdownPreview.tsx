@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Box, Paper, Typography, Button, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { StoryItem, Settings, MarkdownLinkTenant, ProjectType, MarkdownHeadingLevel, UserStory, BugReport } from '../types/story';
 import { toMarkdown } from '../utils/markdown';
 import { useSnackbar } from '../contexts/SnackbarContext';
@@ -48,6 +51,17 @@ function appendAccessibilitySection(md: string, headingLevel: MarkdownHeadingLev
   return md;
 }
 
+function appendJiraTicketSection(md: string, headingLevel: MarkdownHeadingLevel, lang: 'de' | 'en', jiraTicket: string | undefined): string {
+  if (!jiraTicket?.trim()) return md;
+  const h = headingLevel === 'h1' ? '#' : headingLevel === 'h2' ? '##' : '###';
+  const title = lang === 'de' ? 'Jira Ticket' : 'Jira Ticket';
+  const text = jiraTicket.trim();
+  const content = /^https?:\/\//i.test(text) ? `[${text}](${text})` : text;
+  md += `\n\n${h} **🎫 ${title}**\n\n`;
+  md += content;
+  return md;
+}
+
 export function MarkdownPreview({ item, activeLang, settings, onCopy }: MarkdownPreviewProps) {
   const snackbar = useSnackbar();
   const headingLevel = (settings?.markdownHeadingLevel ?? 'h3') as MarkdownHeadingLevel;
@@ -57,8 +71,13 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   const [linkTenant, setLinkTenant] = useState<MarkdownLinkTenant>(() => suggestedTenant ?? settings?.markdownLinkTenant ?? 'none');
   const hasImages = item?.type === 'user-story' && (item as UserStory).images?.length > 0;
   const hasCopyBook = item?.type === 'user-story' && (item as UserStory).copyBook?.length > 0;
+  const hasJiraTicket = item?.type === 'user-story' && !!(item as UserStory).jiraTicket?.trim();
+  const isUserStory = item?.type === 'user-story';
   const [includeImages, setIncludeImages] = useState(settings?.markdownIncludeImages !== false);
   const [includeCopyBook, setIncludeCopyBook] = useState(settings?.markdownIncludeCopyBook !== false);
+  const [includeJiraTicket, setIncludeJiraTicket] = useState(settings?.markdownIncludeJiraTicket !== false);
+  const [includeTodos, setIncludeTodos] = useState(settings?.markdownIncludeTodos !== false);
+  const [includeEfforts, setIncludeEfforts] = useState(settings?.markdownIncludeEfforts !== false);
 
   useEffect(() => {
     if (suggestedTenant) {
@@ -69,37 +88,54 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
   useEffect(() => {
     setIncludeImages(settings?.markdownIncludeImages !== false);
     setIncludeCopyBook(settings?.markdownIncludeCopyBook !== false);
-  }, [settings?.markdownIncludeImages, settings?.markdownIncludeCopyBook, item?.id]);
+    setIncludeJiraTicket(settings?.markdownIncludeJiraTicket !== false);
+    setIncludeTodos(settings?.markdownIncludeTodos !== false);
+    setIncludeEfforts(settings?.markdownIncludeEfforts !== false);
+  }, [settings?.markdownIncludeImages, settings?.markdownIncludeCopyBook, settings?.markdownIncludeJiraTicket, settings?.markdownIncludeTodos, settings?.markdownIncludeEfforts, item?.id]);
 
   const handleCopy = useCallback(() => {
     if (!item) return;
     const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
     const copyBookOpt = hasCopyBook && includeCopyBook ? (item as UserStory).copyBook : undefined;
+    const effortsOpt = isUserStory && includeEfforts ? (item as UserStory).efforts : undefined;
     let md = toMarkdown(item, activeLang, {
       headingLevel,
       images: imagesOpt,
       includeCopyBook: !!copyBookOpt,
       copyBook: copyBookOpt,
+      includeTodos: isUserStory ? includeTodos : true,
+      includeEfforts: isUserStory && includeEfforts,
+      efforts: effortsOpt,
     });
     const link = getAccessibilityLink(linkTenant, settings, lang);
     md = appendAccessibilitySection(md, headingLevel, lang, link);
+    if (isUserStory && includeJiraTicket) {
+      md = appendJiraTicketSection(md, headingLevel, lang, (item as UserStory).jiraTicket);
+    }
     navigator.clipboard.writeText(md);
     snackbar.showSuccess('In Zwischenablage kopiert');
     onCopy?.();
-  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages, hasCopyBook, includeCopyBook, snackbar]);
+  }, [item, activeLang, headingLevel, linkTenant, settings, lang, onCopy, hasImages, includeImages, hasCopyBook, includeCopyBook, isUserStory, includeJiraTicket, includeTodos, includeEfforts, snackbar]);
 
   if (!item) return null;
 
   const imagesOpt = hasImages && includeImages ? (item as UserStory).images : [];
   const copyBookOpt = hasCopyBook && includeCopyBook ? (item as UserStory).copyBook : undefined;
+  const effortsOpt = isUserStory && includeEfforts ? (item as UserStory).efforts : undefined;
   let md = toMarkdown(item, activeLang, {
     headingLevel,
     images: imagesOpt,
     includeCopyBook: !!copyBookOpt,
     copyBook: copyBookOpt,
+    includeTodos: isUserStory ? includeTodos : true,
+    includeEfforts: isUserStory && includeEfforts,
+    efforts: effortsOpt,
   });
   const link = getAccessibilityLink(linkTenant, settings, lang);
   md = appendAccessibilitySection(md, headingLevel, lang, link);
+  if (isUserStory && includeJiraTicket) {
+    md = appendJiraTicketSection(md, headingLevel, lang, (item as UserStory).jiraTicket);
+  }
   const title =
     item.type === 'user-story'
       ? (lang === 'en' ? (item.titleEN ?? item.title) : item.title)
@@ -164,29 +200,59 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
               URL in Einstellungen fehlt
             </Typography>
           )}
-          {hasImages && (
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeImages}
-                  onChange={(e) => setIncludeImages(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Bilder einbinden"
-            />
-          )}
-          {hasCopyBook && (
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeCopyBook}
-                  onChange={(e) => setIncludeCopyBook(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Copy-Book-Tabelle einbinden"
-            />
+          {isUserStory && (
+            <>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeImages}
+                    onChange={(e) => setIncludeImages(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Bilder einbinden"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeCopyBook}
+                    onChange={(e) => setIncludeCopyBook(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Copy-Book-Tabelle einbinden"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeJiraTicket}
+                    onChange={(e) => setIncludeJiraTicket(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Jira-Ticket einbinden"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeTodos}
+                    onChange={(e) => setIncludeTodos(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="To-Do's (BE/FE/QA) einbinden"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeEfforts}
+                    onChange={(e) => setIncludeEfforts(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Aufwände (PD) einbinden"
+              />
+            </>
           )}
           <Button
           variant="contained"
@@ -213,6 +279,37 @@ export function MarkdownPreview({ item, activeLang, settings, onCopy }: Markdown
         }}
       >
         {md}
+      </Box>
+
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="h6" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <VisibilityIcon fontSize="small" />
+          Vorschau (wie in Jira/Confluence)
+        </Typography>
+        <Box
+          sx={{
+            p: 2.5,
+            bgcolor: 'background.default',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            overflow: 'auto',
+            maxHeight: 500,
+            '& h1': { fontSize: '1.5rem', fontWeight: 700, mt: 2, mb: 1, '&:first-of-type': { mt: 0 } },
+            '& h2': { fontSize: '1.25rem', fontWeight: 600, mt: 2, mb: 1, '&:first-of-type': { mt: 0 } },
+            '& h3': { fontSize: '1.1rem', fontWeight: 600, mt: 1.5, mb: 0.75, '&:first-of-type': { mt: 0 } },
+            '& p': { mb: 1, lineHeight: 1.6 },
+            '& ul, & ol': { pl: 2.5, mb: 1 },
+            '& li': { mb: 0.25 },
+            '& table': { borderCollapse: 'collapse', width: '100%', mb: 1 },
+            '& th, & td': { border: '1px solid', borderColor: 'divider', p: 1, textAlign: 'left' },
+            '& th': { bgcolor: 'action.hover', fontWeight: 600 },
+            '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+            '& strong': { fontWeight: 600 },
+          }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+        </Box>
       </Box>
     </Paper>
   );

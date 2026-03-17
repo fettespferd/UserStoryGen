@@ -103,7 +103,6 @@ const USER_STORY_EN_SCHEMA = `{
   "title": "Short, concise story title (max. 60 chars, e.g. 'End life phase in settings')",
   "description": "As a [role] I want [goal], so that [benefit].",
   "acceptanceCriteria": ["AC1: ...", "AC2: ...", "AC3: ..."],
-  "todos": { "be": [], "fe": [], "qa": [] },
   "roles": "...",
   "prerequisites": "...",
   "userFlows": { "happyPath": ["User …", "System …"], "errorScenario": ["User …", "System detects ..."] },
@@ -155,6 +154,7 @@ export interface UseAIGeneratorReturn {
     settings: Settings | null
   ) => Promise<UserStory | null>;
   syncDEToEN: (item: UserStory, settings: Settings | null) => Promise<UserStory | null>;
+  syncENToDE: (item: UserStory, settings: Settings | null) => Promise<UserStory | null>;
   regenerateFullBugReport: (
     item: BugReport,
     prompt: string,
@@ -345,7 +345,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
             en: {
               description: enResult.description,
               acceptanceCriteria: enResult.acceptanceCriteria,
-              todos: enResult.todos,
+              todos: { be: [], fe: [], qa: [] },
               roles: enResult.roles,
               prerequisites: enResult.prerequisites,
               userFlows: enResult.userFlows,
@@ -462,7 +462,7 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
           en: {
             description: enResult.description,
             acceptanceCriteria: enResult.acceptanceCriteria,
-            todos: enResult.todos,
+            todos: item.en.todos ?? { be: [], fe: [], qa: [] },
             roles: enResult.roles,
             prerequisites: enResult.prerequisites,
             userFlows: enResult.userFlows,
@@ -512,11 +512,60 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
           en: {
             description: enResult.description,
             acceptanceCriteria: enResult.acceptanceCriteria,
-            todos: enResult.todos,
+            todos: item.en.todos ?? { be: [], fe: [], qa: [] },
             roles: enResult.roles,
             prerequisites: enResult.prerequisites,
             userFlows: enResult.userFlows,
             outOfScope: enResult.outOfScope,
+          },
+        };
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [generateSingle]
+  );
+
+  const syncENToDE = useCallback(
+    async (item: UserStory, settings: Settings | null): Promise<UserStory | null> => {
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+      const e = item.en;
+      if (!e?.description) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const titleSource = (item.titleEN ?? item.title).trim();
+        const enContent = `Translate this English User Story into German. Keep the same structure and quality. Also translate the title into German.
+
+English Story:
+Title: ${titleSource}
+Description: ${e.description}
+Acceptance Criteria: ${(e.acceptanceCriteria ?? []).map((ac, i) => `AC${i + 1}: ${ac}`).join('\n')}
+Prerequisites: ${(e.prerequisites ?? []).join('\n')}
+Happy Path: ${(e.userFlows?.happyPath ?? []).join('\n')}
+Error Scenario: ${(e.userFlows?.errorScenario ?? []).join('\n')}
+Links (do not translate, keep as is): ${(item.links ?? []).join('\n')}
+Out of Scope: ${(e.outOfScope ?? []).join('\n')}`;
+        const opts = { promptPrefix: 'Translate the following English User Story into German.' };
+        const deResult = (await generateSingle(enContent, 'user-story-de', settings, undefined, opts)) as UserStoryDE | null;
+        if (!deResult) return null;
+        const titleDE = (deResult as { title?: string }).title?.trim() || titleSource;
+        return {
+          ...item,
+          title: titleDE,
+          de: {
+            beschreibung: deResult.beschreibung,
+            akzeptanzkriterien: deResult.akzeptanzkriterien,
+            voraussetzungen: deResult.voraussetzungen,
+            nutzerflows: deResult.nutzerflows,
+            outOfScope: deResult.outOfScope,
           },
         };
       } catch (err) {
@@ -816,6 +865,9 @@ Keine anderen Texte.`;
         voraussetzungen: { de: 'Voraussetzung', en: 'Prerequisite' },
         prerequisites: { de: 'Voraussetzung', en: 'Prerequisite' },
         outOfScope: { de: 'Out-of-Scope-Punkt', en: 'Out-of-scope item' },
+        'todos.be': { de: 'To-Do (Backend)', en: 'To-Do (Backend)' },
+        'todos.fe': { de: 'To-Do (Frontend)', en: 'To-Do (Frontend)' },
+        'todos.qa': { de: 'To-Do (QA)', en: 'To-Do (QA)' },
       };
       const label = sectionLabels[section]?.[lang] ?? 'Listenpunkt';
       const isAc = section === 'akzeptanzkriterien' || section === 'acceptanceCriteria';
@@ -949,7 +1001,7 @@ Der Output soll ein mehrzeiliger Text sein, den der User als Vorlage in ein Besc
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, extractCopyBook, generatePromptFromDescription, generateSingleListItem, isLoading, error };
+  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, syncENToDE, extractCopyBook, generatePromptFromDescription, generateSingleListItem, isLoading, error };
 }
 
 function parseAIResponse(

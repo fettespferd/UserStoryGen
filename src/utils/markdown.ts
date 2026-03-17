@@ -26,6 +26,11 @@ export interface MarkdownOptions {
   /** Copy-Book-Tabelle (Element, DE, EN) einbinden */
   includeCopyBook?: boolean;
   copyBook?: CopyBookEntry[];
+  /** To-Do's (BE/FE/QA) einbinden – kann leer sein */
+  includeTodos?: boolean;
+  /** Efforts (PD) einbinden – kann leer sein */
+  includeEfforts?: boolean;
+  efforts?: { be?: number; fe?: number; qa?: number };
 }
 
 export function toMarkdown(
@@ -37,18 +42,22 @@ export function toMarkdown(
   const images = options?.images ?? (item.type === 'user-story' ? (item as UserStory).images : undefined);
   const includeCopyBook = options?.includeCopyBook ?? true;
   const copyBook = options?.copyBook ?? (item.type === 'user-story' ? (item as UserStory).copyBook : undefined);
+  const includeTodos = options?.includeTodos ?? true;
+  const includeEfforts = options?.includeEfforts ?? false;
+  const efforts = options?.efforts ?? (item.type === 'user-story' ? (item as UserStory).efforts : undefined);
   if (item.type === 'bug-report') return bugReportToMarkdown(item, activeLang ?? 'de', h);
   if (item.type === 'user-story') {
     const lang = activeLang ?? 'de';
+    const todos = item.en?.todos;
     return lang === 'de'
-      ? userStoryDEToMarkdown(item.de, h, item.links, images, includeCopyBook ? copyBook : undefined)
-      : userStoryENToMarkdown(item.en, h, item.links, images, includeCopyBook ? copyBook : undefined);
+      ? userStoryDEToMarkdown(item.de, h, item.links, images, includeCopyBook ? copyBook : undefined, includeTodos, includeEfforts, todos, efforts)
+      : userStoryENToMarkdown(item.en, h, item.links, images, includeCopyBook ? copyBook : undefined, includeTodos, includeEfforts, efforts);
   }
   if (item.type === 'user-story-de') {
     const legacyLinks = [...(item.anhaenge ?? []), ...(item.jiraTicket?.trim() ? [item.jiraTicket] : [])];
-    return userStoryDEToMarkdown(item, h, legacyLinks, undefined, undefined);
+    return userStoryDEToMarkdown(item, h, legacyLinks, undefined, undefined, false, false, undefined, undefined);
   }
-  if (item.type === 'user-story-en') return userStoryENToMarkdown(item, h, item.resources ?? [], undefined, undefined);
+  if (item.type === 'user-story-en') return userStoryENToMarkdown(item, h, item.resources ?? [], undefined, undefined, true, false, undefined);
   return '';
 }
 
@@ -151,12 +160,35 @@ function appendCopyBookSection(lines: string[], h: MarkdownHeadingLevel, copyBoo
   lines.push(copyBookToMarkdownTable(copyBook));
 }
 
+function appendEffortsSection(lines: string[], h: MarkdownHeadingLevel, efforts: { be?: number; fe?: number; qa?: number } | undefined, lang: 'de' | 'en'): void {
+  const label = lang === 'de' ? '⏱️ Aufwände (PD)' : '⏱️ Efforts (PD)';
+  const be = efforts?.be ?? 0;
+  const fe = efforts?.fe ?? 0;
+  const qa = efforts?.qa ?? 0;
+  const total = be + fe + qa;
+  const areaLabel = lang === 'de' ? 'Bereich' : 'Area';
+  const estLabel = lang === 'de' ? 'Schätzung (PD)' : 'Estimate (PD)';
+  lines.push('');
+  lines.push(heading(h, label));
+  lines.push('');
+  lines.push(`| ${areaLabel} | ${estLabel} |`);
+  lines.push('| --- | --- |');
+  lines.push(`| BE | ${be} |`);
+  lines.push(`| FE | ${fe} |`);
+  lines.push(`| QA | ${qa} |`);
+  lines.push(`| ${lang === 'de' ? 'Gesamt' : 'Total'} | ${total} |`);
+}
+
 function userStoryDEToMarkdown(
   story: UserStoryDE | import('../types/story').UserStoryDEContent,
   h: MarkdownHeadingLevel,
   links?: string[],
   images?: string[],
-  copyBook?: CopyBookEntry[]
+  copyBook?: CopyBookEntry[],
+  includeTodos?: boolean,
+  includeEfforts?: boolean,
+  todos?: { be?: string[]; fe?: string[]; qa?: string[] },
+  efforts?: { be?: number; fe?: number; qa?: number }
 ): string {
   const lines: string[] = [];
 
@@ -188,13 +220,33 @@ function userStoryDEToMarkdown(
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
   appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'de');
-  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'de');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
   (story.outOfScope ?? []).forEach((v) => lines.push(`- ${v}`));
+  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'de');
+  if (includeTodos && todos) appendTodosSection(lines, h, todos, 'de');
+  if (includeEfforts) appendEffortsSection(lines, h, efforts, 'de');
 
   return lines.join('\n');
+}
+
+function appendTodosSection(lines: string[], h: MarkdownHeadingLevel, todos: { be?: string[]; fe?: string[]; qa?: string[] }, lang: 'de' | 'en'): void {
+  const label = lang === 'de' ? "🗒️ To-Do's (BE / FE / QA)" : "🗒️ To-Do's (BE / FE / QA)";
+  lines.push('');
+  lines.push(heading(h, label));
+  lines.push('');
+  lines.push('**BE**');
+  lines.push('');
+  (todos.be ?? []).forEach((t) => lines.push(`- ${t}`));
+  lines.push('');
+  lines.push('**FE**');
+  lines.push('');
+  (todos.fe ?? []).forEach((t) => lines.push(`- ${t}`));
+  lines.push('');
+  lines.push('**QA**');
+  lines.push('');
+  (todos.qa ?? []).forEach((t) => lines.push(`- ${t}`));
 }
 
 function userStoryENToMarkdown(
@@ -202,9 +254,13 @@ function userStoryENToMarkdown(
   h: MarkdownHeadingLevel,
   links?: string[],
   images?: string[],
-  copyBook?: CopyBookEntry[]
+  copyBook?: CopyBookEntry[],
+  includeTodos?: boolean,
+  includeEfforts?: boolean,
+  efforts?: { be?: number; fe?: number; qa?: number }
 ): string {
   const lines: string[] = [];
+  const todos = story.todos ?? { be: [], fe: [], qa: [] };
 
   lines.push(heading(h, '📝 Description'));
   lines.push('');
@@ -213,14 +269,6 @@ function userStoryENToMarkdown(
   lines.push(heading(h, '✅ Acceptance Criteria'));
   lines.push('');
   story.acceptanceCriteria.forEach((ac, i) => lines.push(`AC${i + 1}: ${stripAcPrefix(ac)}`));
-  lines.push('');
-  lines.push(heading(h, "🗒️ To-Do's (BE / FE / QA)"));
-  lines.push('');
-  lines.push('**BE**');
-  lines.push('');
-  lines.push('**FE**');
-  lines.push('');
-  lines.push('**QA**');
   lines.push('');
   lines.push(heading(h, '👥 Roles'));
   lines.push('');
@@ -246,11 +294,13 @@ function userStoryENToMarkdown(
   lines.push('');
   (links ?? []).forEach((v) => lines.push(`- ${v}`));
   appendImagesSection(lines, h, images ?? [], '🖼️ Design-Bilder', '🖼️ Design Images', 'en');
-  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'en');
   lines.push('');
   lines.push(heading(h, '🚫 Out of Scope'));
   lines.push('');
   (story.outOfScope ?? []).forEach((v) => lines.push(`- ${v}`));
+  appendCopyBookSection(lines, h, copyBook, '📋 Copy Book (UI-Texte)', '📋 Copy Book (UI Texts)', 'en');
+  if (includeTodos) appendTodosSection(lines, h, todos, 'en');
+  if (includeEfforts) appendEffortsSection(lines, h, efforts, 'en');
 
   return lines.join('\n');
 }

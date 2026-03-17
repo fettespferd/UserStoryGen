@@ -51,6 +51,7 @@ export function createUserStory(id: string, title = 'User Story'): UserStory {
     de: { ...DE_CONTENT },
     en: { ...EN_CONTENT },
     links: [],
+    jiraTicket: '',
     copyBook: [],
     images: [],
   };
@@ -170,6 +171,7 @@ export function createUserStoryFromTemplate(id: string, template: StoryTemplate,
     de: { ...template.de },
     en: { ...template.en },
     links: [],
+    jiraTicket: '',
     copyBook: [],
     images: [],
   };

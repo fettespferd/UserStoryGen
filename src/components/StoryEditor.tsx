@@ -4,6 +4,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import TranslateIcon from '@mui/icons-material/Translate';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -40,6 +41,7 @@ function StoryLangEditor({
   ai,
   settings,
   item,
+  hideTodos,
 }: {
   lang: 'de' | 'en';
   content: UserStory['de'] | UserStory['en'];
@@ -47,6 +49,7 @@ function StoryLangEditor({
   ai: UseAIGeneratorReturn;
   settings: Settings | null;
   item: UserStory;
+  hideTodos?: boolean;
 }) {
   const [regenSection, setRegenSection] = useState<string | null>(null);
   const [regenPrompt, setRegenPrompt] = useState('');
@@ -161,6 +164,14 @@ function StoryLangEditor({
               </IconButton>
             </Box>
           ))}
+          <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('de', 'akzeptanzkriterien', [...c.akzeptanzkriterien, ''])}>
+              Hinzufügen
+            </Button>
+            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'de', 'akzeptanzkriterien', settings); if (v) updateUserStoryField('de', 'akzeptanzkriterien', [...c.akzeptanzkriterien, v]); }} disabled={!hasApiKey || ai.isLoading}>
+              Mit KI
+            </Button>
+          </Box>
         </Box>
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -371,12 +382,60 @@ function StoryLangEditor({
             </IconButton>
           </Box>
         ))}
+        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'acceptanceCriteria', [...c.acceptanceCriteria, ''])}>
+            Add
+          </Button>
+          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'en', 'acceptanceCriteria', settings); if (v) updateUserStoryField('en', 'acceptanceCriteria', [...c.acceptanceCriteria, v]); }} disabled={!hasApiKey || ai.isLoading}>
+            With AI
+          </Button>
+        </Box>
       </Box>
+      {!hideTodos && (
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            🗒️ To-Do's (BE / FE / QA)
+          </Typography>
+          {(['be', 'fe', 'qa'] as const).map((area) => (
+            <Box key={area} sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+                {area.toUpperCase()}
+              </Typography>
+              {(c.todos?.[area] ?? []).map((t, i) => (
+                <Box key={i} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <EditableField
+                      value={t}
+                      onChange={(v) => {
+                        const arr = [...(c.todos?.[area] ?? [])];
+                        arr[i] = v;
+                        updateUserStoryNestedField('en', 'todos', area, arr);
+                      }}
+                      label=""
+                    />
+                  </Box>
+                  <IconButton size="small" onClick={() => updateUserStoryNestedField('en', 'todos', area, (c.todos?.[area] ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove">
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('en', 'todos', area, [...(c.todos?.[area] ?? []), ''])} sx={{ mt: 0.5 }}>
+                Add
+              </Button>
+            </Box>
+          ))}
+        </Box>
+      )}
       <Box>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
           👥 Roles
         </Typography>
         <EditableField value={c.roles} onChange={(v) => updateUserStoryField('en', 'roles', v)} multiline />
+        <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryField('en', 'roles', (c.roles?.trim() ? `${c.roles}\n• ` : '• '))}>
+            Add
+          </Button>
+        </Box>
       </Box>
       <Box>
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -551,7 +610,25 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
   const [fullRegenPrompt, setFullRegenPrompt] = useState('');
   const [linksRegenOpen, setLinksRegenOpen] = useState(false);
   const [linksRegenPrompt, setLinksRegenPrompt] = useState('');
+  const [todoPasteOpen, setTodoPasteOpen] = useState<'be' | 'fe' | 'qa' | null>(null);
+  const [todoPasteText, setTodoPasteText] = useState('');
   const hasApiKey = Boolean(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey);
+
+  const parsePastedTodoList = (text: string): string[] => {
+    return text
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^(\s*[\-•*·]\s*|\s*\d+\.\s*)+/, '').trim())
+      .filter((line) => line.length > 0);
+  };
+
+  const handleTodoPasteApply = (area: 'be' | 'fe' | 'qa') => {
+    const items = parsePastedTodoList(todoPasteText);
+    if (items.length > 0) {
+      store.updateUserStoryNestedField('en', 'todos', area, [...(item.en?.todos?.[area] ?? []), ...items]);
+    }
+    setTodoPasteOpen(null);
+    setTodoPasteText('');
+  };
 
   const handleLinksRegen = async () => {
     if (!hasApiKey || !linksRegenPrompt.trim()) return;
@@ -581,6 +658,16 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
       store.setCurrentItem(updated);
       store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
       snackbar.showSuccess('DE → EN übertragen');
+    }
+  };
+
+  const handleSyncENToDE = async () => {
+    if (!item || !hasApiKey) return;
+    const updated = await ai.syncENToDE(item, settings);
+    if (updated) {
+      store.setCurrentItem(updated);
+      store.setItems(store.items.map((i) => (i.id === updated.id ? updated : i)));
+      snackbar.showSuccess('EN → DE übertragen');
     }
   };
 
@@ -655,19 +742,107 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
             <Tab label="Deutsch" />
             <Tab label="English" />
           </Tabs>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={ai.isLoading ? <CircularProgress size={18} color="inherit" /> : <TranslateIcon />}
-            onClick={handleSyncDEToEN}
-            disabled={!hasApiKey || ai.isLoading}
-          >
-            {ai.isLoading ? 'Wird übertragen…' : 'DE → EN übertragen'}
-          </Button>
+          {tab === 0 && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={ai.isLoading ? <CircularProgress size={18} color="inherit" /> : <TranslateIcon />}
+              onClick={handleSyncDEToEN}
+              disabled={!hasApiKey || ai.isLoading || !item.de?.beschreibung?.trim()}
+            >
+              {ai.isLoading ? 'Wird übertragen…' : 'DE → EN'}
+            </Button>
+          )}
+          {tab === 1 && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={ai.isLoading ? <CircularProgress size={18} color="inherit" /> : <TranslateIcon />}
+              onClick={handleSyncENToDE}
+              disabled={!hasApiKey || ai.isLoading || !item.en?.description?.trim()}
+            >
+              {ai.isLoading ? 'Wird übertragen…' : 'EN → DE'}
+            </Button>
+          )}
         </Box>
 
         {tab === 0 && <StoryLangEditor lang="de" content={item.de} store={store} ai={ai} settings={settings} item={item} />}
-        {tab === 1 && <StoryLangEditor lang="en" content={item.en} store={store} ai={ai} settings={settings} item={item} />}
+        {tab === 1 && <StoryLangEditor lang="en" content={item.en} store={store} ai={ai} settings={settings} item={item} hideTodos />}
+
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            🗒️ To-Do's (BE / FE / QA)
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Optional – werden im Markdown angezeigt, wenn der Toggle aktiv ist.
+          </Typography>
+          {(['be', 'fe', 'qa'] as const).map((area) => (
+            <Box key={area} sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+                {area.toUpperCase()}
+              </Typography>
+              {(item.en?.todos?.[area] ?? []).map((t, i) => (
+                <Box key={i} sx={{ mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <EditableField
+                      value={t}
+                      onChange={(v) => {
+                        const arr = [...(item.en?.todos?.[area] ?? [])];
+                        arr[i] = v;
+                        store.updateUserStoryNestedField('en', 'todos', area, arr);
+                      }}
+                      label=""
+                    />
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={async () => {
+                      const v = await ai.generateSingleListItem(item, 'en', `todos.${area}`, settings, undefined, i);
+                      if (v) {
+                        const arr = [...(item.en?.todos?.[area] ?? [])];
+                        arr[i] = v;
+                        store.updateUserStoryNestedField('en', 'todos', area, arr);
+                      }
+                    }}
+                    disabled={!hasApiKey || ai.isLoading}
+                    title="Mit KI ersetzen"
+                  >
+                    <AutoAwesomeIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => store.updateUserStoryNestedField('en', 'todos', area, (item.en?.todos?.[area] ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen">
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                <Button size="small" startIcon={<AddIcon />} onClick={() => store.updateUserStoryNestedField('en', 'todos', area, [...(item.en?.todos?.[area] ?? []), ''])}>
+                  Hinzufügen
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<PlaylistAddIcon />}
+                  onClick={() => {
+                    setTodoPasteOpen(area);
+                    setTodoPasteText('');
+                  }}
+                >
+                  Liste einfügen
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={async () => {
+                    const v = await ai.generateSingleListItem(item, 'en', `todos.${area}`, settings);
+                    if (v) store.updateUserStoryNestedField('en', 'todos', area, [...(item.en?.todos?.[area] ?? []), v]);
+                  }}
+                  disabled={!hasApiKey || ai.isLoading}
+                >
+                  Mit KI
+                </Button>
+              </Box>
+            </Box>
+          ))}
+        </Box>
 
         <Box sx={{ mt: 3 }}>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -682,6 +857,56 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
             Gemeinsam für DE (Krankenkasse) und EN (Entwickler) – ein Eintrag für beide
           </Typography>
+          <TextField
+            size="small"
+            label="Jira Ticket"
+            placeholder="z.B. PROJ-123 oder https://jira.example.com/browse/PROJ-123"
+            value={item.jiraTicket ?? ''}
+            onChange={(e) => store.updateField('jiraTicket', e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <TextField
+              size="small"
+              type="number"
+              label="Aufwand BE (PD)"
+              value={item.efforts?.be ?? ''}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                const v = e.target.value === '' || isNaN(n) ? undefined : n;
+                store.updateField('efforts', { ...item.efforts, be: v });
+              }}
+              inputProps={{ min: 0, step: 0.5 }}
+              sx={{ width: 120 }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Aufwand FE (PD)"
+              value={item.efforts?.fe ?? ''}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                const v = e.target.value === '' || isNaN(n) ? undefined : n;
+                store.updateField('efforts', { ...item.efforts, fe: v });
+              }}
+              inputProps={{ min: 0, step: 0.5 }}
+              sx={{ width: 120 }}
+            />
+            <TextField
+              size="small"
+              type="number"
+              label="Aufwand QA (PD)"
+              value={item.efforts?.qa ?? ''}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value);
+                const v = e.target.value === '' || isNaN(n) ? undefined : n;
+                store.updateField('efforts', { ...item.efforts, qa: v });
+              }}
+              inputProps={{ min: 0, step: 0.5 }}
+              sx={{ width: 120 }}
+            />
+          </Box>
           {(item.links ?? []).map((v, i) => (
             <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -729,6 +954,44 @@ export function StoryEditor({ item, store, ai, settings, onDelete, onSave, saveL
             <Button onClick={() => setLinksRegenOpen(false)}>Abbrechen</Button>
             <Button onClick={handleLinksRegen} variant="contained" disabled={!linksRegenPrompt.trim() || ai.isLoading}>
               {ai.isLoading ? 'Wird angepasst...' : 'Anpassen'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={todoPasteOpen !== null}
+          onClose={() => { setTodoPasteOpen(null); setTodoPasteText(''); }}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Liste einfügen – {todoPasteOpen ? todoPasteOpen.toUpperCase() : ''}</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              label="Liste mit Aufzählungszeichen"
+              fullWidth
+              multiline
+              minRows={6}
+              value={todoPasteText}
+              onChange={(e) => setTodoPasteText(e.target.value)}
+              placeholder={`z.B.:
+- Erste Aufgabe
+- Zweite Aufgabe
+• Oder mit Bullet-Points
+1. Oder nummeriert`}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Ein Zeile pro Punkt. Aufzählungszeichen (-, •, *, 1.) werden automatisch entfernt.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => { setTodoPasteOpen(null); setTodoPasteText(''); }}>Abbrechen</Button>
+            <Button
+              variant="contained"
+              onClick={() => todoPasteOpen && handleTodoPasteApply(todoPasteOpen)}
+              disabled={!todoPasteText.trim()}
+            >
+              Einfügen
             </Button>
           </DialogActions>
         </Dialog>

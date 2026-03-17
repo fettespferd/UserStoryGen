@@ -81,6 +81,10 @@ export interface UserStory {
   en: UserStoryENContent;
   /** Gemeinsame Links/Ressourcen (DE+EN) – ein Eintrag für Krankenkasse und Entwickler */
   links: string[];
+  /** Jira-Ticket (z.B. PROJ-123 oder URL) – optionaler Abschnitt im Markdown */
+  jiraTicket?: string;
+  /** Aufwandsschätzung (PD) – optionaler Abschnitt, kann leer sein */
+  efforts?: { be?: number; fe?: number; qa?: number };
   /** UI-Texte (Element, DE, EN) – Teil der Story, neu generierbar */
   copyBook: CopyBookEntry[];
   /** Design-Bilder (base64) – für Extraktion und Regenerierung */
@@ -261,6 +265,12 @@ export interface Settings {
   markdownIncludeImages?: boolean;
   /** Standard: Copy-Book-Tabelle (UI-Texte) beim Markdown-Kopieren einbinden. */
   markdownIncludeCopyBook?: boolean;
+  /** Standard: Jira-Ticket-Abschnitt beim Markdown-Kopieren einbinden. */
+  markdownIncludeJiraTicket?: boolean;
+  /** Standard: To-Do's (BE/FE/QA) beim Markdown-Kopieren einbinden. */
+  markdownIncludeTodos?: boolean;
+  /** Standard: Aufwände (PD) beim Markdown-Kopieren einbinden. */
+  markdownIncludeEfforts?: boolean;
   /** @deprecated Migration: Nutze backgroundImage + backgroundColor. */
   background?: BackgroundOption;
   /** Bild-Asset für Hintergrund (null/undefined = kein Bild). Kann mit backgroundColor kombiniert werden. */
