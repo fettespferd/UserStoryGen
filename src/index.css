@@ -7,3 +7,15 @@
 body {
   font-family: system-ui, sans-serif;
 }
+
+/* Drop-Zonen-Linien nur sichtbar während Drag */
+.story-drop-zone {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body.story-drag-active .story-drop-zone {
+  opacity: 0.5;
+}
+body.story-drag-active .story-drop-zone.is-drop-target {
+  opacity: 1;
+}

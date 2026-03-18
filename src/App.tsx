@@ -169,8 +169,7 @@ function AppContent({
   const [moveMenuAnchor, setMoveMenuAnchor] = useState<{ el: HTMLElement; itemId: string } | null>(null);
   const [deleteFolderConfirmId, setDeleteFolderConfirmId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null | undefined>(undefined);
-  const [dragOverStoryId, setDragOverStoryId] = useState<string | undefined>(undefined);
-  const [isDragging, setIsDragging] = useState(false);
+  const [dragOverStoryId, setDragOverStoryId] = useState<string | 'end' | undefined>(undefined);
   const [foldersLoaded, setFoldersLoaded] = useState(false);
 
   const handleSaveStory = useCallback(async () => {
@@ -343,6 +342,17 @@ function AppContent({
     return byParent;
   }, [store.folders]);
 
+  const folderOptionsForSelect = useMemo(() => {
+    const out: { id: string; name: string }[] = [];
+    for (const root of folderTree.get(null) ?? []) {
+      out.push({ id: root.id, name: root.name });
+      for (const sub of folderTree.get(root.id) ?? []) {
+        out.push({ id: sub.id, name: `  ↳ ${sub.name}` });
+      }
+    }
+    return out;
+  }, [folderTree]);
+
   const hasStoriesWithoutFolder = store.items.some((i) => !i.folderId);
 
   useEffect(() => {
@@ -352,18 +362,9 @@ function AppContent({
   }, [selectedFolderId, hasStoriesWithoutFolder]);
 
   useEffect(() => {
-    const onDragStart = (e: DragEvent) => {
-      if ((e.target as HTMLElement).closest('[data-story-drag-handle]')) {
-        setIsDragging(true);
-      }
-    };
-    const onDragEnd = () => setIsDragging(false);
-    document.addEventListener('dragstart', onDragStart);
+    const onDragEnd = () => document.body.classList.remove('story-drag-active');
     document.addEventListener('dragend', onDragEnd);
-    return () => {
-      document.removeEventListener('dragstart', onDragStart);
-      document.removeEventListener('dragend', onDragEnd);
-    };
+    return () => document.removeEventListener('dragend', onDragEnd);
   }, []);
 
   const handleCreateFolder = useCallback(async () => {
@@ -408,13 +409,13 @@ function AppContent({
   );
 
   const handleReorderStories = useCallback(
-    async (draggedId: string, targetId: string) => {
+    async (draggedId: string, targetId: string | 'end') => {
       const folderId = selectedFolderId === 'all' || selectedFolderId === null ? null : selectedFolderId;
       const inFolder = store.items.filter((i) => (i.folderId ?? null) === folderId);
       const sorted = [...inFolder].sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
       const dragIdx = sorted.findIndex((i) => i.id === draggedId);
-      const targetIdx = sorted.findIndex((i) => i.id === targetId);
-      if (dragIdx < 0 || targetIdx < 0) return;
+      const targetIdx = targetId === 'end' ? sorted.length : sorted.findIndex((i) => i.id === targetId);
+      if (dragIdx < 0 || (targetId !== 'end' && targetIdx < 0)) return;
       const [removed] = sorted.splice(dragIdx, 1);
       sorted.splice(targetIdx, 0, removed);
       const toSave = sorted.map((item, idx) => ({ ...item, order: idx }));
@@ -436,10 +437,16 @@ function AppContent({
 
   const handleDeleteFolder = useCallback(
     async (folderId: string) => {
-      const affectedItems = store.items.filter((i) => i.folderId === folderId);
-      const newFolders = store.folders.filter((f) => f.id !== folderId);
+      const collectIds = (parentId: string): Set<string> => {
+        const ids = new Set<string>([parentId]);
+        store.folders.filter((f) => f.parentId === parentId).forEach((f) => collectIds(f.id).forEach((x) => ids.add(x)));
+        return ids;
+      };
+      const toDelete = collectIds(folderId);
+      const affectedItems = store.items.filter((i) => i.folderId && toDelete.has(i.folderId));
+      const newFolders = store.folders.filter((f) => !toDelete.has(f.id));
       store.deleteFolder(folderId);
-      if (selectedFolderId === folderId) setSelectedFolderId('all');
+      if (toDelete.has(selectedFolderId as string)) setSelectedFolderId('all');
       if (storage.hasAccess) {
         try {
           await saveFoldersToStorage(newFolders);
@@ -702,7 +709,7 @@ function AppContent({
                   )}
                 </>
               ) : (
-                <AIGenerator ai={ai} settings={settings} folders={store.folders} onGenerated={handleAIGenerated} />
+                <AIGenerator ai={ai} settings={settings} folders={folderOptionsForSelect} onGenerated={handleAIGenerated} />
               )}
             </Box>
 
@@ -753,8 +760,10 @@ function AppContent({
                 >
                   <Box
                     sx={{
-                      width: isMobile ? '100%' : 220,
-                      minWidth: isMobile ? undefined : 220,
+                      width: isMobile ? '100%' : 'fit-content',
+                      minWidth: isMobile ? undefined : 200,
+                      maxWidth: isMobile ? undefined : 320,
+                      flexShrink: 0,
                       borderRight: isMobile ? 'none' : '1px solid',
                       borderBottom: isMobile ? '1px solid' : 'none',
                       borderColor: 'divider',
@@ -813,39 +822,83 @@ function AppContent({
                         </ListItemButton>
                       </Box>
                     )}
-                    {(folderTree.get(null) ?? []).map((f) => (
-                      <Box
-                        key={f.id}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          borderRadius: 1,
-                          position: 'relative',
-                          height: 32,
-                          bgcolor: dragOverFolderId === f.id ? 'action.hover' : 'transparent',
-                          transition: 'background-color 0.15s',
-                        }}
-                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverFolderId(f.id); setDragOverStoryId(undefined); }}
-                        onDragLeave={() => setDragOverFolderId(undefined)}
-                        onDrop={(e) => handleDropOnFolder(e, f.id)}
-                      >
-                        <ListItemButton
-                          dense
-                          selected={selectedFolderId === f.id}
-                          onClick={() => setSelectedFolderId(f.id)}
-                          sx={{ borderRadius: 1, py: 0.25, minHeight: 'unset', height: 32, flex: 1 }}
+                    {(folderTree.get(null) ?? []).map((root) => (
+                      <Box key={root.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            borderRadius: 1,
+                            position: 'relative',
+                            height: 32,
+                            bgcolor: dragOverFolderId === root.id ? 'action.hover' : 'transparent',
+                            transition: 'background-color 0.15s',
+                          }}
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverFolderId(root.id); setDragOverStoryId(undefined); }}
+                          onDragLeave={() => setDragOverFolderId(undefined)}
+                          onDrop={(e) => handleDropOnFolder(e, root.id)}
                         >
-                          <FolderIcon sx={{ mr: 1.5, fontSize: 20, color: 'primary.main' }} />
-                          <ListItemText primary={f.name} primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }} />
-                        </ListItemButton>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => { e.stopPropagation(); setDeleteFolderConfirmId(f.id); }}
-                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
-                          title="Ordner löschen"
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
+                          <ListItemButton
+                            dense
+                            selected={selectedFolderId === root.id}
+                            onClick={() => setSelectedFolderId(root.id)}
+                            sx={{ borderRadius: 1, py: 0.25, minHeight: 'unset', height: 32, flex: 1 }}
+                          >
+                            <FolderIcon sx={{ mr: 1.5, fontSize: 20, color: 'primary.main' }} />
+                            <ListItemText primary={root.name} primaryTypographyProps={{ variant: 'body2', fontWeight: 500, sx: { whiteSpace: 'nowrap', overflow: 'visible' } }} />
+                          </ListItemButton>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); setFolderDialogParentId(root.id); setFolderDialogOpen(true); }}
+                            sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
+                            title="Unterordner erstellen"
+                          >
+                            <CreateNewFolderIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); setDeleteFolderConfirmId(root.id); }}
+                            sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
+                            title="Ordner löschen"
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                        {(folderTree.get(root.id) ?? []).map((sub) => (
+                          <Box
+                            key={sub.id}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              borderRadius: 1,
+                              pl: 2.5,
+                              height: 32,
+                              bgcolor: dragOverFolderId === sub.id ? 'action.hover' : 'transparent',
+                              transition: 'background-color 0.15s',
+                            }}
+                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverFolderId(sub.id); setDragOverStoryId(undefined); }}
+                            onDragLeave={() => setDragOverFolderId(undefined)}
+                            onDrop={(e) => handleDropOnFolder(e, sub.id)}
+                          >
+                            <ListItemButton
+                              dense
+                              selected={selectedFolderId === sub.id}
+                              onClick={() => setSelectedFolderId(sub.id)}
+                              sx={{ borderRadius: 1, py: 0.25, minHeight: 'unset', height: 32, flex: 1 }}
+                            >
+                              <FolderIcon sx={{ mr: 1.5, fontSize: 18, color: 'primary.main', opacity: 0.8 }} />
+                              <ListItemText primary={sub.name} primaryTypographyProps={{ variant: 'body2', fontWeight: 500, sx: { whiteSpace: 'nowrap', overflow: 'visible' } }} />
+                            </ListItemButton>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => { e.stopPropagation(); setDeleteFolderConfirmId(sub.id); }}
+                              sx={{ opacity: 0.6, '&:hover': { opacity: 1 }, flexShrink: 0 }}
+                              title="Ordner löschen"
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
                       </Box>
                     ))}
                     {store.folders.length === 0 && (
@@ -909,6 +962,7 @@ function AppContent({
                         <Box key={item.id}>
                           {selectedFolderId !== 'all' && (
                             <Box
+                              className={`story-drop-zone${isDropTarget ? ' is-drop-target' : ''}`}
                               onDragOver={(e) => {
                                 e.preventDefault();
                                 e.dataTransfer.dropEffect = 'move';
@@ -926,11 +980,11 @@ function AppContent({
                               }}
                               sx={{
                                 height: 6,
+                                minHeight: 6,
                                 mx: 1,
                                 borderRadius: 1,
-                                bgcolor: 'primary.main',
-                                opacity: isDragging ? (isDropTarget ? 0.7 : 0.2) : 0,
-                                transition: 'opacity 0.15s',
+                                bgcolor: isDropTarget ? 'primary.main' : 'grey.500',
+                                flexShrink: 0,
                               }}
                             />
                           )}
@@ -968,9 +1022,11 @@ function AppContent({
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               {store.folders.length > 0 && (
                                 <Box
-                                  data-story-drag-handle
                                   draggable
                                   onDragStart={(e) => {
+                                    if (selectedFolderId !== 'all') {
+                                      document.body.classList.add('story-drag-active');
+                                    }
                                     e.dataTransfer.setData('text/plain', item.id);
                                     e.dataTransfer.effectAllowed = 'move';
                                     const img = document.createElement('div');
@@ -1029,6 +1085,34 @@ function AppContent({
                         </Box>
                       );
                     })}
+                    {selectedFolderId !== 'all' && filteredAndSortedItems.length > 0 && (
+                      <Box
+                        className={`story-drop-zone${dragOverStoryId === 'end' ? ' is-drop-target' : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          setDragOverStoryId('end');
+                          setDragOverFolderId(undefined);
+                        }}
+                        onDragLeave={() => setDragOverStoryId(undefined)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const draggedId = e.dataTransfer.getData('text/plain');
+                          if (draggedId) {
+                            handleReorderStories(draggedId, 'end');
+                          }
+                          setDragOverStoryId(undefined);
+                        }}
+                        sx={{
+                          height: 6,
+                          minHeight: 6,
+                          mx: 1,
+                          borderRadius: 1,
+                          bgcolor: dragOverStoryId === 'end' ? 'primary.main' : 'grey.500',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
                   </List>
                   </Box>
                 </Box>
@@ -1081,17 +1165,31 @@ function AppContent({
               <FolderIcon sx={{ mr: 1.5, fontSize: 18, opacity: 0.6 }} />
               Ohne Ordner
             </MenuItem>
-            {store.folders.map((f) => (
-              <MenuItem
-                key={f.id}
-                onClick={() => {
-                  if (moveMenuAnchor) handleMoveToFolder(moveMenuAnchor.itemId, f.id);
-                  setMoveMenuAnchor(null);
-                }}
-              >
-                <FolderIcon sx={{ mr: 1.5, fontSize: 18, color: 'primary.main' }} />
-                {f.name}
-              </MenuItem>
+            {(folderTree.get(null) ?? []).map((root) => (
+              <Box key={root.id}>
+                <MenuItem
+                  onClick={() => {
+                    if (moveMenuAnchor) handleMoveToFolder(moveMenuAnchor.itemId, root.id);
+                    setMoveMenuAnchor(null);
+                  }}
+                >
+                  <FolderIcon sx={{ mr: 1.5, fontSize: 18, color: 'primary.main' }} />
+                  {root.name}
+                </MenuItem>
+                {(folderTree.get(root.id) ?? []).map((sub) => (
+                  <MenuItem
+                    key={sub.id}
+                    onClick={() => {
+                      if (moveMenuAnchor) handleMoveToFolder(moveMenuAnchor.itemId, sub.id);
+                      setMoveMenuAnchor(null);
+                    }}
+                    sx={{ pl: 4 }}
+                  >
+                    <FolderIcon sx={{ mr: 1.5, fontSize: 16, color: 'primary.main', opacity: 0.8 }} />
+                    {sub.name}
+                  </MenuItem>
+                ))}
+              </Box>
             ))}
             <Box component="hr" sx={{ border: 'none', borderTop: 1, borderColor: 'divider', my: 1 }} />
           </>
@@ -1108,8 +1206,8 @@ function AppContent({
         </MenuItem>
       </Menu>
 
-      <Dialog open={folderDialogOpen} onClose={() => { setFolderDialogOpen(false); setNewFolderName(''); }}>
-        <DialogTitle>Neuer Ordner</DialogTitle>
+      <Dialog open={folderDialogOpen} onClose={() => { setFolderDialogOpen(false); setNewFolderName(''); setFolderDialogParentId(null); }}>
+        <DialogTitle>{folderDialogParentId ? 'Neuer Unterordner' : 'Neuer Ordner'}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -1122,7 +1220,7 @@ function AppContent({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setFolderDialogOpen(false); setNewFolderName(''); }}>Abbrechen</Button>
+          <Button onClick={() => { setFolderDialogOpen(false); setNewFolderName(''); setFolderDialogParentId(null); }}>Abbrechen</Button>
           <Button variant="contained" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
             Erstellen
           </Button>

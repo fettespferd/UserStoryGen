@@ -31,7 +31,7 @@ export interface UseStoryStoreReturn {
   updateFolder: (id: string, name: string) => void;
   deleteFolder: (id: string) => void;
   moveStoryToFolder: (itemId: string, folderId: string | null) => void;
-  reorderItems: (draggedId: string, targetId: string, folderId: string | null) => void;
+  reorderItems: (draggedId: string, targetId: string | 'end', folderId: string | null) => void;
 }
 
 export function useStoryStore(): UseStoryStoreReturn {
@@ -39,6 +39,8 @@ export function useStoryStore(): UseStoryStoreReturn {
   const [items, setItems] = useState<StoryItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const currentItemIdRef = useRef<string | null>(null);
+  const foldersRef = useRef<Folder[]>([]);
+  foldersRef.current = folders;
 
   useEffect(() => {
     currentItemIdRef.current = currentItem?.id ?? null;
@@ -235,9 +237,15 @@ export function useStoryStore(): UseStoryStoreReturn {
   }, []);
 
   const deleteFolder = useCallback((id: string) => {
-    setFolders((prev) => prev.filter((f) => f.id !== id));
+    const collectIds = (folderList: Folder[], parentId: string): Set<string> => {
+      const ids = new Set<string>([parentId]);
+      folderList.filter((f) => f.parentId === parentId).forEach((f) => collectIds(folderList, f.id).forEach((x) => ids.add(x)));
+      return ids;
+    };
+    const toDelete = collectIds(foldersRef.current, id);
+    setFolders((prev) => prev.filter((f) => !toDelete.has(f.id)));
     setItems((prev) =>
-      prev.map((i) => (i.folderId === id ? { ...i, folderId: null as string | null } : i))
+      prev.map((i) => (i.folderId && toDelete.has(i.folderId) ? { ...i, folderId: null as string | null } : i))
     );
   }, []);
 
@@ -250,14 +258,14 @@ export function useStoryStore(): UseStoryStoreReturn {
     }
   }, [currentItem?.id]);
 
-  const reorderItems = useCallback((draggedId: string, targetId: string, folderId: string | null) => {
+  const reorderItems = useCallback((draggedId: string, targetId: string | 'end', folderId: string | null) => {
     if (draggedId === targetId) return;
     setItems((prev) => {
       const inFolder = prev.filter((i) => (i.folderId ?? null) === folderId);
       const sorted = [...inFolder].sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
       const dragIdx = sorted.findIndex((i) => i.id === draggedId);
-      const targetIdx = sorted.findIndex((i) => i.id === targetId);
-      if (dragIdx < 0 || targetIdx < 0) return prev;
+      const targetIdx = targetId === 'end' ? sorted.length : sorted.findIndex((i) => i.id === targetId);
+      if (dragIdx < 0 || (targetId !== 'end' && targetIdx < 0)) return prev;
       const [removed] = sorted.splice(dragIdx, 1);
       sorted.splice(targetIdx, 0, removed);
       const withOrder = sorted.map((item, idx) => ({ ...item, order: idx }));
