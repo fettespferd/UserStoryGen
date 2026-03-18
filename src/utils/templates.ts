@@ -9,12 +9,16 @@ const DE_CONTENT = {
   ],
   voraussetzungen: ['[Feature Flags, Daten, Freigaben]'],
   nutzerflows: {
-    happyFlow: ['User …', 'System …', 'System …', 'System …'],
-    fehlerszenario: [
-      'User …',
-      'System erkennt [Bedingung].',
-      'System zeigt Fehlermeldung.',
-      'Zurück zur Maske stellt Eingaben wieder her.',
+    happyFlows: [
+      ['User …', 'System …', 'System …', 'System …'],
+    ],
+    fehlerszenarien: [
+      [
+        'User …',
+        'System erkennt [Bedingung].',
+        'System zeigt Fehlermeldung.',
+        'Zurück zur Maske stellt Eingaben wieder her.',
+      ],
     ],
   },
   outOfScope: ['[Explizit Nicht-Bestandteil]'],
@@ -31,12 +35,16 @@ const EN_CONTENT = {
   roles: '[Users, stakeholders]',
   prerequisites: ['[Feature flags, data, approvals]'],
   userFlows: {
-    happyPath: ['User …', 'System …', 'System …', 'System …'],
-    errorScenario: [
-      'User …',
-      'System detects [condition].',
-      'System shows error message.',
-      'Back to form restores inputs.',
+    happyPaths: [
+      ['User …', 'System …', 'System …', 'System …'],
+    ],
+    errorScenarios: [
+      [
+        'User …',
+        'System detects [condition].',
+        'System shows error message.',
+        'Back to form restores inputs.',
+      ],
     ],
   },
   outOfScope: ['[Explicitly not included]'],

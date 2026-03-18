@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { StoryItem, Settings } from '../types/story';
+import type { StoryItem, Settings, Folder } from '../types/story';
 import { migrateItem } from '../utils/migrate';
 import { loadDirHandle, saveDirHandle } from '../utils/dirHandleStorage';
 
 const STORIES_DIR = 'user-stories';
+const FOLDERS_FILE = '_folders.json';
 const SETTINGS_FILE = 'settings.json';
 const SETTINGS_LOCAL_KEY = 'userstorygen-settings';
 
@@ -18,6 +19,8 @@ export interface UseStorageReturn {
   loadStories: (handle?: FileSystemDirectoryHandle) => Promise<StoryItem[]>;
   saveStory: (item: StoryItem) => Promise<void>;
   deleteStory: (item: StoryItem) => Promise<void>;
+  loadFolders: (handle?: FileSystemDirectoryHandle) => Promise<Folder[]>;
+  saveFolders: (folders: Folder[]) => Promise<void>;
   loadSettings: () => Promise<Settings | null>;
   saveSettings: (settings: Settings) => Promise<void>;
   folderName: string | null;
@@ -60,6 +63,40 @@ export function useStorage(): UseStorageReturn {
     return await dirHandle.getDirectoryHandle(STORIES_DIR, { create: true });
   }, [dirHandle]);
 
+  const loadFolders = useCallback(async (handle?: FileSystemDirectoryHandle): Promise<Folder[]> => {
+    const h = handle ?? dirHandle;
+    if (!h) return [];
+    try {
+      const storiesDir = await h.getDirectoryHandle(STORIES_DIR, { create: true });
+      try {
+        const fileHandle = await storiesDir.getFileHandle(FOLDERS_FILE, { create: false });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const parsed = JSON.parse(text) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((f): f is Folder => f && typeof f === 'object' && typeof f.id === 'string' && typeof f.name === 'string');
+        }
+      } catch {
+        // _folders.json existiert noch nicht
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [dirHandle]);
+
+  const saveFolders = useCallback(
+    async (folders: Folder[]): Promise<void> => {
+      if (!dirHandle) throw new Error('Kein Ordner ausgewählt');
+      const storiesDir = await getOrCreateStoriesDir();
+      const fileHandle = await storiesDir.getFileHandle(FOLDERS_FILE, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(folders, null, 2));
+      await writable.close();
+    },
+    [dirHandle, getOrCreateStoriesDir]
+  );
+
   const loadStories = useCallback(async (handle?: FileSystemDirectoryHandle): Promise<StoryItem[]> => {
     const h = handle ?? dirHandle;
     if (!h) return [];
@@ -67,7 +104,7 @@ export function useStorage(): UseStorageReturn {
       const storiesDir = await h.getDirectoryHandle(STORIES_DIR, { create: true });
       const stories: StoryItem[] = [];
       for await (const entry of storiesDir.values()) {
-        if (entry.kind === 'file' && entry.name.endsWith('.json')) {
+        if (entry.kind === 'file' && entry.name.endsWith('.json') && !entry.name.startsWith('_')) {
           const file = await (entry as FileSystemFileHandle).getFile();
           const text = await file.text();
           try {
@@ -202,6 +239,8 @@ export function useStorage(): UseStorageReturn {
     loadStories,
     saveStory,
     deleteStory,
+    loadFolders,
+    saveFolders,
     loadSettings,
     saveSettings,
     folderName,

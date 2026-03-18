@@ -59,19 +59,36 @@ function StoryLangEditor({
   const hasApiKey = Boolean(settings?.apiKeyOpenAI || settings?.apiKeyAnthropic || settings?.apiKey);
   const handleRegenSection = async () => {
     if (!regenSection || !hasApiKey) return;
-    const result = await ai.regenerateSection(lang, regenSection, regenPrompt, settings);
-    if (result && item.type === 'user-story') {
-      if (regenSection === 'links' && Array.isArray(result)) {
-        store.updateUserStoryLinks(result);
-      } else if (Array.isArray(result)) {
-        if (regenSection.includes('.')) {
-          const [field, subField] = regenSection.split('.');
-          store.updateUserStoryNestedField(lang, field, subField, result);
+    const flowMatch = regenSection.match(/^(nutzerflows|userFlows)\.(happyFlows|fehlerszenarien|happyPaths|errorScenarios)\.(\d+)$/);
+    if (flowMatch && item.type === 'user-story') {
+      const [, field, flowType, idxStr] = flowMatch;
+      const flowIndex = parseInt(idxStr, 10);
+      const result = await ai.regenerateFlow(item, lang, flowType as 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios', flowIndex, regenPrompt, settings);
+      if (result) {
+        const content = lang === 'de' ? item.de : item.en;
+        const flows = field === 'nutzerflows'
+          ? [...((content as { nutzerflows?: { [k: string]: string[][] } }).nutzerflows?.[flowType] ?? [])]
+          : [...((content as { userFlows?: { [k: string]: string[][] } }).userFlows?.[flowType] ?? [])];
+        if (flows[flowIndex] !== undefined) {
+          flows[flowIndex] = result;
+          store.updateUserStoryNestedField(lang, field, flowType, flows);
+        }
+      }
+    } else {
+      const result = await ai.regenerateSection(lang, regenSection, regenPrompt, settings);
+      if (result && item.type === 'user-story') {
+        if (regenSection === 'links' && Array.isArray(result)) {
+          store.updateUserStoryLinks(result);
+        } else if (Array.isArray(result)) {
+          if (regenSection.includes('.') && !regenSection.match(/\.\d+$/)) {
+            const [field, subField] = regenSection.split('.');
+            store.updateUserStoryNestedField(lang, field, subField, result);
+          } else if (!regenSection.includes('.')) {
+            store.updateUserStoryField(lang, regenSection, result);
+          }
         } else {
           store.updateUserStoryField(lang, regenSection, result);
         }
-      } else {
-        store.updateUserStoryField(lang, regenSection, result);
       }
     }
     setRegenSection(null);
@@ -90,23 +107,22 @@ function StoryLangEditor({
     </Button>
   );
 
-  const getSectionForListType = (listType: string): string => {
-    if (listType === 'happyFlow') return lang === 'de' ? 'nutzerflows.happyFlow' : 'userFlows.happyPath';
-    if (listType === 'fehlerszenario') return lang === 'de' ? 'nutzerflows.fehlerszenario' : 'userFlows.errorScenario';
-    return listType;
+  const getSectionForFlow = (flowType: 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios', flowIndex: number): string => {
+    const field = lang === 'de' ? 'nutzerflows' : 'userFlows';
+    const sub = lang === 'de' ? (flowType === 'happyFlows' ? 'happyFlows' : 'fehlerszenarien') : (flowType === 'happyPaths' ? 'happyPaths' : 'errorScenarios');
+    return `${field}.${sub}.${flowIndex}`;
   };
 
   const SingleItemGenButton = ({
-    listType,
+    section,
     index,
     onGenerated,
   }: {
-    listType: 'akzeptanzkriterien' | 'acceptanceCriteria' | 'voraussetzungen' | 'prerequisites' | 'outOfScope' | 'happyFlow' | 'fehlerszenario' | 'happyPath' | 'errorScenario';
+    section: string;
     index: number;
     onGenerated: (value: string) => void;
   }) => {
     const handleGen = async () => {
-      const section = getSectionForListType(listType);
       const result = await ai.generateSingleListItem(item, lang, section, settings, undefined, index);
       if (result) onGenerated(result);
     };
@@ -158,7 +174,7 @@ function StoryLangEditor({
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <EditableField value={stripAcPrefix(ac)} onChange={(v) => updateUserStoryArrayField('de', 'akzeptanzkriterien', i, v)} label={`AC${i + 1}`} multiline />
               </Box>
-              <SingleItemGenButton listType="akzeptanzkriterien" index={i} onGenerated={(v) => { const arr = [...c.akzeptanzkriterien]; arr[i] = v; updateUserStoryField('de', 'akzeptanzkriterien', arr); }} />
+              <SingleItemGenButton section="akzeptanzkriterien" index={i} onGenerated={(v) => { const arr = [...c.akzeptanzkriterien]; arr[i] = v; updateUserStoryField('de', 'akzeptanzkriterien', arr); }} />
               <IconButton size="small" onClick={() => updateUserStoryField('de', 'akzeptanzkriterien', c.akzeptanzkriterien.filter((_, idx) => idx !== i))} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -196,7 +212,7 @@ function StoryLangEditor({
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <EditableField value={v} onChange={(val) => { const arr = [...(c.voraussetzungen ?? [])]; arr[i] = val; updateUserStoryField('de', 'voraussetzungen', arr); }} label={`${i + 1}`} multiline />
               </Box>
-              <SingleItemGenButton listType="voraussetzungen" index={i} onGenerated={(val) => { const arr = [...(c.voraussetzungen ?? [])]; arr[i] = val; updateUserStoryField('de', 'voraussetzungen', arr); }} />
+              <SingleItemGenButton section="voraussetzungen" index={i} onGenerated={(val) => { const arr = [...(c.voraussetzungen ?? [])]; arr[i] = val; updateUserStoryField('de', 'voraussetzungen', arr); }} />
               <IconButton size="small" onClick={() => updateUserStoryField('de', 'voraussetzungen', (c.voraussetzungen ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -205,79 +221,95 @@ function StoryLangEditor({
         </Box>
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-            🔀 Nutzerflows – Happy Flow
-            <SectionRegenButton section="nutzerflows.happyFlow" />
-            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', [...c.nutzerflows.happyFlow, ''])}>
-              Hinzufügen
+            🔀 Nutzerflows – Happy Flows
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', [...(c.nutzerflows.happyFlows ?? []), []])}>
+              Flow hinzufügen
             </Button>
-            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'de', 'nutzerflows.happyFlow', settings); if (v) updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', [...c.nutzerflows.happyFlow, v]); }} disabled={!hasApiKey || ai.isLoading}>
-              Mit KI
+            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateFlow(item, 'de', 'happyFlows', settings); if (v) updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', [...(c.nutzerflows.happyFlows ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
+              Flow mit KI
             </Button>
           </Typography>
-          {c.nutzerflows.happyFlow.map((step, i) => (
-            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                <IconButton size="small" onClick={() => { const arr = [...c.nutzerflows.happyFlow]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr); } }} disabled={i === 0} title="Nach oben">
-                  <ArrowUpwardIcon fontSize="small" />
+          {(c.nutzerflows.happyFlows ?? []).map((flow, flowIdx) => (
+            <Box key={flowIdx} sx={{ mb: 2, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                Happy Flow {flowIdx + 1}
+                <SectionRegenButton section={`nutzerflows.happyFlows.${flowIdx}`} />
+                <IconButton size="small" onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', (c.nutzerflows.happyFlows ?? []).filter((_, i) => i !== flowIdx))} color="error" title="Flow entfernen">
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small" onClick={() => { const arr = [...c.nutzerflows.happyFlow]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr); } }} disabled={i === c.nutzerflows.happyFlow.length - 1} title="Nach unten">
-                  <ArrowDownwardIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <EditableField
-                  value={step}
-                  onChange={(v) => {
-                    const arr = [...c.nutzerflows.happyFlow];
-                    arr[i] = v;
-                    updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr);
-                  }}
-                  label={`Schritt ${i + 1}`}
-                />
-              </Box>
-              <SingleItemGenButton listType="happyFlow" index={i} onGenerated={(v) => { const arr = [...c.nutzerflows.happyFlow]; arr[i] = v; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', arr); }} />
-              <IconButton size="small" onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'happyFlow', c.nutzerflows.happyFlow.filter((_, idx) => idx !== i))} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              </Typography>
+              {flow.map((step, i) => (
+                <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...arr[flowIdx]]; if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); } }} disabled={i === 0} title="Nach oben">
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...arr[flowIdx]]; if (i < f.length - 1) { [f[i], f[i + 1]] = [f[i + 1], f[i]]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); } }} disabled={i === flow.length - 1} title="Nach unten">
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <EditableField value={step} onChange={(v) => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); }} label={`Schritt ${i + 1}`} />
+                  </Box>
+                  <SingleItemGenButton section={getSectionForFlow('happyFlows', flowIdx)} index={i} onGenerated={(v) => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); }} />
+                  <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = arr[flowIdx].filter((_, idx) => idx !== i); arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); }} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...(arr[flowIdx] ?? []), '']; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); }}>
+                Schritt hinzufügen
+              </Button>
+              <Button size="small" startIcon={<AutoAwesomeIcon />} sx={{ mt: 0.5, ml: 0.5 }} onClick={async () => { const v = await ai.generateSingleListItem(item, 'de', getSectionForFlow('happyFlows', flowIdx), settings); if (v) { const arr = [...(c.nutzerflows.happyFlows ?? [])]; const f = [...(arr[flowIdx] ?? []), v]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'happyFlows', arr); } }} disabled={!hasApiKey || ai.isLoading}>
+                Schritt mit KI
+              </Button>
             </Box>
           ))}
         </Box>
         <Box>
           <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-            🔀 Nutzerflows – Fehlerszenario
-            <SectionRegenButton section="nutzerflows.fehlerszenario" />
-            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', [...(c.nutzerflows.fehlerszenario ?? []), ''])}>
-              Hinzufügen
+            🔀 Nutzerflows – Fehlerszenarien
+            <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', [...(c.nutzerflows.fehlerszenarien ?? []), []])}>
+              Flow hinzufügen
             </Button>
-            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'de', 'nutzerflows.fehlerszenario', settings); if (v) updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', [...(c.nutzerflows.fehlerszenario ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
-              Mit KI
+            <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateFlow(item, 'de', 'fehlerszenarien', settings); if (v) updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', [...(c.nutzerflows.fehlerszenarien ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
+              Flow mit KI
             </Button>
           </Typography>
-          {(c.nutzerflows.fehlerszenario ?? []).map((step, i) => (
-            <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenario ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr); } }} disabled={i === 0} title="Nach oben">
-                  <ArrowUpwardIcon fontSize="small" />
+          {(c.nutzerflows.fehlerszenarien ?? []).map((flow, flowIdx) => (
+            <Box key={flowIdx} sx={{ mb: 2, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                Fehlerszenario {flowIdx + 1}
+                <SectionRegenButton section={`nutzerflows.fehlerszenarien.${flowIdx}`} />
+                <IconButton size="small" onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', (c.nutzerflows.fehlerszenarien ?? []).filter((_, i) => i !== flowIdx))} color="error" title="Flow entfernen">
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
-                <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenario ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr); } }} disabled={i === (c.nutzerflows.fehlerszenario?.length ?? 0) - 1} title="Nach unten">
-                  <ArrowDownwardIcon fontSize="small" />
-                </IconButton>
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <EditableField
-                  value={step}
-                  onChange={(v) => {
-                    const arr = [...(c.nutzerflows.fehlerszenario ?? [])];
-                    arr[i] = v;
-                    updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr);
-                  }}
-                  label={`Schritt ${i + 1}`}
-                />
-              </Box>
-              <SingleItemGenButton listType="fehlerszenario" index={i} onGenerated={(v) => { const arr = [...(c.nutzerflows.fehlerszenario ?? [])]; arr[i] = v; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', arr); }} />
-              <IconButton size="small" onClick={() => updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenario', (c.nutzerflows.fehlerszenario ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              </Typography>
+              {flow.map((step, i) => (
+                <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...arr[flowIdx]]; if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); } }} disabled={i === 0} title="Nach oben">
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...arr[flowIdx]]; if (i < f.length - 1) { [f[i], f[i + 1]] = [f[i + 1], f[i]]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); } }} disabled={i === flow.length - 1} title="Nach unten">
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <EditableField value={step} onChange={(v) => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); }} label={`Schritt ${i + 1}`} />
+                  </Box>
+                  <SingleItemGenButton section={getSectionForFlow('fehlerszenarien', flowIdx)} index={i} onGenerated={(v) => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); }} />
+                  <IconButton size="small" onClick={() => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = arr[flowIdx].filter((_, idx) => idx !== i); arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); }} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...(arr[flowIdx] ?? []), '']; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); }}>
+                Schritt hinzufügen
+              </Button>
+              <Button size="small" startIcon={<AutoAwesomeIcon />} sx={{ mt: 0.5, ml: 0.5 }} onClick={async () => { const v = await ai.generateSingleListItem(item, 'de', getSectionForFlow('fehlerszenarien', flowIdx), settings); if (v) { const arr = [...(c.nutzerflows.fehlerszenarien ?? [])]; const f = [...(arr[flowIdx] ?? []), v]; arr[flowIdx] = f; updateUserStoryNestedField('de', 'nutzerflows', 'fehlerszenarien', arr); } }} disabled={!hasApiKey || ai.isLoading}>
+                Schritt mit KI
+              </Button>
             </Box>
           ))}
         </Box>
@@ -304,7 +336,7 @@ function StoryLangEditor({
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <EditableField value={v} onChange={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('de', 'outOfScope', arr); }} label={`${i + 1}`} multiline />
               </Box>
-              <SingleItemGenButton listType="outOfScope" index={i} onGenerated={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('de', 'outOfScope', arr); }} />
+              <SingleItemGenButton section="outOfScope" index={i} onGenerated={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('de', 'outOfScope', arr); }} />
               <IconButton size="small" onClick={() => updateUserStoryField('de', 'outOfScope', (c.outOfScope ?? []).filter((_, idx) => idx !== i))} color="error" title="Entfernen" sx={{ flexShrink: 0 }}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -376,7 +408,7 @@ function StoryLangEditor({
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <EditableField value={stripAcPrefix(ac)} onChange={(v) => updateUserStoryArrayField('en', 'acceptanceCriteria', i, v)} label={`AC${i + 1}`} multiline />
             </Box>
-            <SingleItemGenButton listType="acceptanceCriteria" index={i} onGenerated={(v) => { const arr = [...c.acceptanceCriteria]; arr[i] = v; updateUserStoryField('en', 'acceptanceCriteria', arr); }} />
+            <SingleItemGenButton section="acceptanceCriteria" index={i} onGenerated={(v) => { const arr = [...c.acceptanceCriteria]; arr[i] = v; updateUserStoryField('en', 'acceptanceCriteria', arr); }} />
             <IconButton size="small" onClick={() => updateUserStoryField('en', 'acceptanceCriteria', c.acceptanceCriteria.filter((_, idx) => idx !== i))} color="error" title="Remove" sx={{ flexShrink: 0 }}>
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -460,7 +492,7 @@ function StoryLangEditor({
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <EditableField value={v} onChange={(val) => { const arr = [...(c.prerequisites ?? [])]; arr[i] = val; updateUserStoryField('en', 'prerequisites', arr); }} label={`${i + 1}`} multiline />
             </Box>
-            <SingleItemGenButton listType="prerequisites" index={i} onGenerated={(val) => { const arr = [...(c.prerequisites ?? [])]; arr[i] = val; updateUserStoryField('en', 'prerequisites', arr); }} />
+            <SingleItemGenButton section="prerequisites" index={i} onGenerated={(val) => { const arr = [...(c.prerequisites ?? [])]; arr[i] = val; updateUserStoryField('en', 'prerequisites', arr); }} />
             <IconButton size="small" onClick={() => updateUserStoryField('en', 'prerequisites', (c.prerequisites ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove" sx={{ flexShrink: 0 }}>
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -469,79 +501,95 @@ function StoryLangEditor({
       </Box>
       <Box>
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          🔀 User Flows – Happy path
-          <SectionRegenButton section="userFlows.happyPath" />
-          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('en', 'userFlows', 'happyPath', [...c.userFlows.happyPath, ''])}>
-            Add
+          🔀 User Flows – Happy paths
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('en', 'userFlows', 'happyPaths', [...(c.userFlows.happyPaths ?? []), []])}>
+            Add flow
           </Button>
-          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'en', 'userFlows.happyPath', settings); if (v) updateUserStoryNestedField('en', 'userFlows', 'happyPath', [...c.userFlows.happyPath, v]); }} disabled={!hasApiKey || ai.isLoading}>
-            With AI
+          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateFlow(item, 'en', 'happyPaths', settings); if (v) updateUserStoryNestedField('en', 'userFlows', 'happyPaths', [...(c.userFlows.happyPaths ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
+            Flow with AI
           </Button>
         </Typography>
-        {c.userFlows.happyPath.map((step, i) => (
-          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <IconButton size="small" onClick={() => { const arr = [...c.userFlows.happyPath]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr); } }} disabled={i === 0} title="Move up">
-                <ArrowUpwardIcon fontSize="small" />
+        {(c.userFlows.happyPaths ?? []).map((flow, flowIdx) => (
+          <Box key={flowIdx} sx={{ mb: 2, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+              Happy path {flowIdx + 1}
+              <SectionRegenButton section={`userFlows.happyPaths.${flowIdx}`} />
+              <IconButton size="small" onClick={() => updateUserStoryNestedField('en', 'userFlows', 'happyPaths', (c.userFlows.happyPaths ?? []).filter((_, i) => i !== flowIdx))} color="error" title="Remove flow">
+                <DeleteIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={() => { const arr = [...c.userFlows.happyPath]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr); } }} disabled={i === c.userFlows.happyPath.length - 1} title="Move down">
-                <ArrowDownwardIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <EditableField
-                value={step}
-                onChange={(v) => {
-                  const arr = [...c.userFlows.happyPath];
-                  arr[i] = v;
-                  updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr);
-                }}
-                label={`Step ${i + 1}`}
-              />
-            </Box>
-            <SingleItemGenButton listType="happyPath" index={i} onGenerated={(v) => { const arr = [...c.userFlows.happyPath]; arr[i] = v; updateUserStoryNestedField('en', 'userFlows', 'happyPath', arr); }} />
-            <IconButton size="small" onClick={() => updateUserStoryNestedField('en', 'userFlows', 'happyPath', c.userFlows.happyPath.filter((_, idx) => idx !== i))} color="error" title="Remove" sx={{ flexShrink: 0 }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+            </Typography>
+            {flow.map((step, i) => (
+              <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...arr[flowIdx]]; if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); } }} disabled={i === 0} title="Move up">
+                    <ArrowUpwardIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...arr[flowIdx]]; if (i < f.length - 1) { [f[i], f[i + 1]] = [f[i + 1], f[i]]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); } }} disabled={i === flow.length - 1} title="Move down">
+                    <ArrowDownwardIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <EditableField value={step} onChange={(v) => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); }} label={`Step ${i + 1}`} />
+                </Box>
+                <SingleItemGenButton section={getSectionForFlow('happyPaths', flowIdx)} index={i} onGenerated={(v) => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); }} />
+                <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = arr[flowIdx].filter((_, idx) => idx !== i); arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); }} color="error" title="Remove" sx={{ flexShrink: 0 }}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+            <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...(arr[flowIdx] ?? []), '']; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); }}>
+              Add step
+            </Button>
+            <Button size="small" startIcon={<AutoAwesomeIcon />} sx={{ mt: 0.5, ml: 0.5 }} onClick={async () => { const v = await ai.generateSingleListItem(item, 'en', getSectionForFlow('happyPaths', flowIdx), settings); if (v) { const arr = [...(c.userFlows.happyPaths ?? [])]; const f = [...(arr[flowIdx] ?? []), v]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'happyPaths', arr); } }} disabled={!hasApiKey || ai.isLoading}>
+              Step with AI
+            </Button>
           </Box>
         ))}
       </Box>
       <Box>
         <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          🔀 User Flows – Error scenario
-          <SectionRegenButton section="userFlows.errorScenario" />
-          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('en', 'userFlows', 'errorScenario', [...(c.userFlows.errorScenario ?? []), ''])}>
-            Add
+          🔀 User Flows – Error scenarios
+          <Button size="small" startIcon={<AddIcon />} onClick={() => updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', [...(c.userFlows.errorScenarios ?? []), []])}>
+            Add flow
           </Button>
-          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateSingleListItem(item, 'en', 'userFlows.errorScenario', settings); if (v) updateUserStoryNestedField('en', 'userFlows', 'errorScenario', [...(c.userFlows.errorScenario ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
-            With AI
+          <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={async () => { const v = await ai.generateFlow(item, 'en', 'errorScenarios', settings); if (v) updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', [...(c.userFlows.errorScenarios ?? []), v]); }} disabled={!hasApiKey || ai.isLoading}>
+            Flow with AI
           </Button>
         </Typography>
-        {(c.userFlows.errorScenario ?? []).map((step, i) => (
-          <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenario ?? [])]; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr); } }} disabled={i === 0} title="Move up">
-                <ArrowUpwardIcon fontSize="small" />
+        {(c.userFlows.errorScenarios ?? []).map((flow, flowIdx) => (
+          <Box key={flowIdx} sx={{ mb: 2, pl: 1, borderLeft: 2, borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+              Error scenario {flowIdx + 1}
+              <SectionRegenButton section={`userFlows.errorScenarios.${flowIdx}`} />
+              <IconButton size="small" onClick={() => updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', (c.userFlows.errorScenarios ?? []).filter((_, i) => i !== flowIdx))} color="error" title="Remove flow">
+                <DeleteIcon fontSize="small" />
               </IconButton>
-              <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenario ?? [])]; if (i < arr.length - 1) { [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]]; updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr); } }} disabled={i === (c.userFlows.errorScenario?.length ?? 0) - 1} title="Move down">
-                <ArrowDownwardIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <EditableField
-                value={step}
-                onChange={(v) => {
-                  const arr = [...(c.userFlows.errorScenario ?? [])];
-                  arr[i] = v;
-                  updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr);
-                }}
-                label={`Step ${i + 1}`}
-              />
-            </Box>
-            <SingleItemGenButton listType="errorScenario" index={i} onGenerated={(v) => { const arr = [...(c.userFlows.errorScenario ?? [])]; arr[i] = v; updateUserStoryNestedField('en', 'userFlows', 'errorScenario', arr); }} />
-            <IconButton size="small" onClick={() => updateUserStoryNestedField('en', 'userFlows', 'errorScenario', (c.userFlows.errorScenario ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove" sx={{ flexShrink: 0 }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+            </Typography>
+            {flow.map((step, i) => (
+              <Box key={i} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...arr[flowIdx]]; if (i > 0) { [f[i - 1], f[i]] = [f[i], f[i - 1]]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); } }} disabled={i === 0} title="Move up">
+                    <ArrowUpwardIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...arr[flowIdx]]; if (i < f.length - 1) { [f[i], f[i + 1]] = [f[i + 1], f[i]]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); } }} disabled={i === flow.length - 1} title="Move down">
+                    <ArrowDownwardIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <EditableField value={step} onChange={(v) => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); }} label={`Step ${i + 1}`} />
+                </Box>
+                <SingleItemGenButton section={getSectionForFlow('errorScenarios', flowIdx)} index={i} onGenerated={(v) => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...arr[flowIdx]]; f[i] = v; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); }} />
+                <IconButton size="small" onClick={() => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = arr[flowIdx].filter((_, idx) => idx !== i); arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); }} color="error" title="Remove" sx={{ flexShrink: 0 }}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+            <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.5 }} onClick={() => { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...(arr[flowIdx] ?? []), '']; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); }}>
+              Add step
+            </Button>
+            <Button size="small" startIcon={<AutoAwesomeIcon />} sx={{ mt: 0.5, ml: 0.5 }} onClick={async () => { const v = await ai.generateSingleListItem(item, 'en', getSectionForFlow('errorScenarios', flowIdx), settings); if (v) { const arr = [...(c.userFlows.errorScenarios ?? [])]; const f = [...(arr[flowIdx] ?? []), v]; arr[flowIdx] = f; updateUserStoryNestedField('en', 'userFlows', 'errorScenarios', arr); } }} disabled={!hasApiKey || ai.isLoading}>
+              Step with AI
+            </Button>
           </Box>
         ))}
       </Box>
@@ -568,7 +616,7 @@ function StoryLangEditor({
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <EditableField value={v} onChange={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('en', 'outOfScope', arr); }} label={`${i + 1}`} multiline />
             </Box>
-            <SingleItemGenButton listType="outOfScope" index={i} onGenerated={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('en', 'outOfScope', arr); }} />
+            <SingleItemGenButton section="outOfScope" index={i} onGenerated={(val) => { const arr = [...(c.outOfScope ?? [])]; arr[i] = val; updateUserStoryField('en', 'outOfScope', arr); }} />
             <IconButton size="small" onClick={() => updateUserStoryField('en', 'outOfScope', (c.outOfScope ?? []).filter((_, idx) => idx !== i))} color="error" title="Remove" sx={{ flexShrink: 0 }}>
               <DeleteIcon fontSize="small" />
             </IconButton>

@@ -1,18 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { StoryItem, CopyBookEntry } from '../types/story';
+import type { StoryItem, CopyBookEntry, Folder } from '../types/story';
 import { createUserStory, createBugReport, generateId } from '../utils/templates';
+
+export function generateFolderId(): string {
+  return `folder-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 export interface UseStoryStoreReturn {
   currentItem: StoryItem | null;
   items: StoryItem[];
+  folders: Folder[];
   setCurrentItem: (item: StoryItem | null) => void;
   setItems: (items: StoryItem[]) => void;
-  createNew: (type: 'user-story' | 'bug-report') => StoryItem;
+  setFolders: (folders: Folder[]) => void;
+  createNew: (type: 'user-story' | 'bug-report', folderId?: string | null) => StoryItem;
   updateField: (field: string, value: unknown) => void;
   updateArrayField: (field: string, index: number, value: string) => void;
   updateUserStoryField: (lang: 'de' | 'en', field: string, value: unknown) => void;
   updateUserStoryArrayField: (lang: 'de' | 'en', field: string, index: number, value: string) => void;
-  updateUserStoryNestedField: (lang: 'de' | 'en', field: string, subField: string, value: string[]) => void;
+  updateUserStoryNestedField: (lang: 'de' | 'en', field: string, subField: string, value: string[] | string[][]) => void;
   updateUserStoryCopyBook: (copyBook: CopyBookEntry[]) => void;
   updateUserStoryImages: (images: string[]) => void;
   updateUserStoryLinks: (links: string[]) => void;
@@ -21,11 +27,17 @@ export interface UseStoryStoreReturn {
   updateBugReportArrayField: (lang: 'de' | 'en', field: string, index: number, value: string) => void;
   loadItem: (id: string) => void;
   deleteItem: (id: string) => void;
+  createFolder: (name: string, parentId?: string | null) => Folder;
+  updateFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string) => void;
+  moveStoryToFolder: (itemId: string, folderId: string | null) => void;
+  reorderItems: (draggedId: string, targetId: string, folderId: string | null) => void;
 }
 
 export function useStoryStore(): UseStoryStoreReturn {
   const [currentItem, setCurrentItem] = useState<StoryItem | null>(null);
   const [items, setItems] = useState<StoryItem[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const currentItemIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -33,12 +45,13 @@ export function useStoryStore(): UseStoryStoreReturn {
   }, [currentItem?.id]);
 
   const createNew = useCallback(
-    (type: 'user-story' | 'bug-report'): StoryItem => {
+    (type: 'user-story' | 'bug-report', folderId?: string | null): StoryItem => {
       const id = generateId();
       const item: StoryItem = type === 'user-story' ? createUserStory(id) : createBugReport(id);
-      setCurrentItem(item);
-      setItems((prev) => [item, ...prev]);
-      return item;
+      const withFolder = { ...item, folderId: folderId ?? null };
+      setCurrentItem(withFolder);
+      setItems((prev) => [withFolder, ...prev]);
+      return withFolder;
     },
     []
   );
@@ -138,17 +151,17 @@ export function useStoryStore(): UseStoryStoreReturn {
   );
 
   const updateUserStoryNestedField = useCallback(
-    (lang: 'de' | 'en', field: string, subField: string, value: string[]) => {
+    (lang: 'de' | 'en', field: string, subField: string, value: string[] | string[][]) => {
       const id = currentItem?.id ?? '';
       setCurrentItem((prev) => {
         if (!prev || prev.type !== 'user-story') return prev;
-        const nested = ((prev[lang] as unknown as Record<string, unknown>)[field] as Record<string, string[]>);
+        const nested = ((prev[lang] as unknown as Record<string, unknown>)[field] as Record<string, string[] | string[][]>);
         return { ...prev, [lang]: { ...prev[lang], [field]: { ...nested, [subField]: value } } };
       });
       setItems((prev) =>
         prev.map((i) => {
           if (i.id !== id || i.type !== 'user-story') return i;
-          const nested = ((i[lang] as unknown as Record<string, unknown>)[field] as Record<string, string[]>);
+          const nested = ((i[lang] as unknown as Record<string, unknown>)[field] as Record<string, string[] | string[][]>);
           return { ...i, [lang]: { ...i[lang], [field]: { ...nested, [subField]: value } } };
         })
       );
@@ -210,11 +223,59 @@ export function useStoryStore(): UseStoryStoreReturn {
     if (currentItem?.id === id) setCurrentItem(null);
   }, [currentItem?.id]);
 
+  const createFolder = useCallback((name: string, parentId?: string | null): Folder => {
+    const id = generateFolderId();
+    const folder: Folder = { id, name, parentId: parentId ?? null };
+    setFolders((prev) => [...prev, folder]);
+    return folder;
+  }, []);
+
+  const updateFolder = useCallback((id: string, name: string) => {
+    setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
+  }, []);
+
+  const deleteFolder = useCallback((id: string) => {
+    setFolders((prev) => prev.filter((f) => f.id !== id));
+    setItems((prev) =>
+      prev.map((i) => (i.folderId === id ? { ...i, folderId: null as string | null } : i))
+    );
+  }, []);
+
+  const moveStoryToFolder = useCallback((itemId: string, folderId: string | null) => {
+    setItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, folderId } : i))
+    );
+    if (currentItem?.id === itemId) {
+      setCurrentItem((prev) => (prev ? { ...prev, folderId } : prev));
+    }
+  }, [currentItem?.id]);
+
+  const reorderItems = useCallback((draggedId: string, targetId: string, folderId: string | null) => {
+    if (draggedId === targetId) return;
+    setItems((prev) => {
+      const inFolder = prev.filter((i) => (i.folderId ?? null) === folderId);
+      const sorted = [...inFolder].sort((a, b) => (a.order ?? 999999) - (b.order ?? 999999));
+      const dragIdx = sorted.findIndex((i) => i.id === draggedId);
+      const targetIdx = sorted.findIndex((i) => i.id === targetId);
+      if (dragIdx < 0 || targetIdx < 0) return prev;
+      const [removed] = sorted.splice(dragIdx, 1);
+      sorted.splice(targetIdx, 0, removed);
+      const withOrder = sorted.map((item, idx) => ({ ...item, order: idx }));
+      const orderMap = new Map(withOrder.map((i) => [i.id, i.order]));
+      return prev.map((i) => {
+        const newOrder = orderMap.get(i.id);
+        return newOrder !== undefined ? { ...i, order: newOrder } : i;
+      });
+    });
+  }, []);
+
   return {
     currentItem,
     items,
+    folders,
     setCurrentItem,
     setItems,
+    setFolders,
     createNew,
     updateField,
     updateArrayField,
@@ -229,5 +290,10 @@ export function useStoryStore(): UseStoryStoreReturn {
     updateBugReportArrayField,
     loadItem,
     deleteItem,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    moveStoryToFolder,
+    reorderItems,
   };
 }

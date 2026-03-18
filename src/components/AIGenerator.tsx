@@ -49,6 +49,7 @@ function toMarkdownTable(entries: CopyBookEntry[]): string {
 interface AIGeneratorProps {
   ai: UseAIGeneratorReturn;
   settings: Settings | null;
+  folders?: { id: string; name: string }[];
   onGenerated: (item: StoryItem) => void;
 }
 
@@ -61,7 +62,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
+export function AIGenerator({ ai, settings, folders = [], onGenerated }: AIGeneratorProps) {
   const snackbar = useSnackbar();
   const [selectedType, setSelectedType] = useState<TicketTypeChoice>('user-story');
   const [detailLevel, setDetailLevel] = useState<DetailLevel>('standard');
@@ -74,6 +75,7 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copyResultDialog, setCopyResultDialog] = useState<CopyBookEntry[] | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [saveToFolderId, setSaveToFolderId] = useState<string | null>(null);
 
   useEffect(() => {
     setProject(defaultProject);
@@ -148,7 +150,8 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
       imageItems.length ? imageItems.map((i) => i.filename) : undefined
     );
     if (result) {
-      onGenerated(result);
+      const withFolder = saveToFolderId ? { ...result, folderId: saveToFolderId } : result;
+      onGenerated(withFolder);
     }
   };
 
@@ -348,6 +351,22 @@ export function AIGenerator({ ai, settings, onGenerated }: AIGeneratorProps) {
           alt="Bild"
         />
       </Box>
+
+      {folders.length > 0 && selectedType !== 'copy-table' && (
+        <FormControl size="small" fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Speichern in Ordner</InputLabel>
+          <Select
+            value={saveToFolderId ?? ''}
+            label="Speichern in Ordner"
+            onChange={(e) => setSaveToFolderId(e.target.value || null)}
+          >
+            <MenuItem value="">Ohne Ordner</MenuItem>
+            {folders.map((f) => (
+              <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
       {selectedType !== 'copy-table' && (
       <Box sx={{ mb: 2 }}>

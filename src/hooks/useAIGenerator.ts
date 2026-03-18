@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType, DetailLevel } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, Settings, ProjectType, DetailLevel, NutzerflowsDE, UserFlowsEN } from '../types/story';
+import { normalizeNutzerflows, normalizeUserFlows } from '../utils/migrate';
 import { generateId } from '../utils/templates';
 import { stripFlowStepNumber } from '../utils/format';
 
@@ -15,6 +16,8 @@ Nutzerflows: Happy Flow und Fehlerszenario nur wenn zur Story passend. Schritte 
 ACs sind Quelle der Wahrheit und überprüfbar. Funktionale und nicht-funktionale Anforderungen berücksichtigen.
 UI-Texte nur in Anführungszeichen.
 
+anhaenge: Maximal 1–3 Einträge. Immer Design-Link(s) (Figma, Zeplin o.ä.). API-Doku nur wenn die Story explizit APIs/Backend betrifft. Keine Jira-Links, keine generischen Platzhalter.
+
 Antworte NUR mit gültigem JSON, kein anderer Text.`;
 
 const SYSTEM_PROMPT_EN = `You are a professional Product Owner. Create User Stories and Bug Reports.
@@ -28,6 +31,8 @@ For Acceptance Criteria: AC1:, AC2:, AC3: format (heading and points bold).
 User flows: Happy path and error scenario only when fitting the story. Steps WITHOUT number prefix (e.g. "User opens..." not "1. User opens...") – order determines numbering.
 ACs are source of truth and verifiable. Consider functional and non-functional requirements.
 UI texts in quotes only.
+
+resources: Max 1–3 entries. Always design link(s) (Figma, Zeplin, etc.). API docs only when the story explicitly involves APIs/backend. No Jira links, no generic placeholders.
 
 Respond ONLY with valid JSON, no other text.`;
 
@@ -93,7 +98,7 @@ const USER_STORY_DE_SCHEMA = `{
   "akzeptanzkriterien": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "voraussetzungen": "...",
   "nutzerflows": { "happyFlow": ["User …", "System …"], "fehlerszenario": ["User …", "System erkennt ..."] },
-  "anhaenge": ["[Designs, APIs, Jira-Link]"],
+  "anhaenge": ["Design-Link (Figma/Zeplin), ggf. API-Doku wenn relevant"],
   "outOfScope": "...",
   "jiraTicket": "..."
 }`;
@@ -106,7 +111,7 @@ const USER_STORY_EN_SCHEMA = `{
   "roles": "...",
   "prerequisites": "...",
   "userFlows": { "happyPath": ["User …", "System …"], "errorScenario": ["User …", "System detects ..."] },
-  "resources": ["[Designs, APIs, Jira link]"],
+  "resources": ["Design link (Figma/Zeplin), optionally API docs if relevant"],
   "outOfScope": "..."
 }`;
 
@@ -140,6 +145,22 @@ export interface UseAIGeneratorReturn {
     prompt: string,
     settings: Settings | null
   ) => Promise<string | string[] | null>;
+  /** Regeneriert einen einzelnen Flow (Happy Flow oder Fehlerszenario) anhand des Prompts. */
+  regenerateFlow: (
+    item: UserStory,
+    lang: 'de' | 'en',
+    flowType: 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios',
+    flowIndex: number,
+    prompt: string,
+    settings: Settings | null
+  ) => Promise<string[] | null>;
+  /** Generiert einen kompletten neuen Flow (Happy Flow oder Fehlerszenario) mit KI. */
+  generateFlow: (
+    item: UserStory,
+    lang: 'de' | 'en',
+    flowType: 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios',
+    settings: Settings | null
+  ) => Promise<string[] | null>;
   generateSingleListItem: (
     item: UserStory,
     lang: 'de' | 'en',
@@ -339,7 +360,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
               beschreibung: deResult.beschreibung,
               akzeptanzkriterien: deResult.akzeptanzkriterien,
               voraussetzungen: deResult.voraussetzungen,
-              nutzerflows: deResult.nutzerflows,
+              nutzerflows: normalizeNutzerflows(deResult.nutzerflows),
               outOfScope: deResult.outOfScope,
             },
             en: {
@@ -348,7 +369,7 @@ export function useAIGenerator(): UseAIGeneratorReturn {
               todos: { be: [], fe: [], qa: [] },
               roles: enResult.roles,
               prerequisites: enResult.prerequisites,
-              userFlows: enResult.userFlows,
+              userFlows: normalizeUserFlows(enResult.userFlows),
               outOfScope: enResult.outOfScope,
             },
           };
@@ -401,6 +422,10 @@ export function useAIGenerator(): UseAIGeneratorReturn {
   const buildStoryContext = (item: UserStory): string => {
     const d = item.de;
     const e = item.en;
+    const happyFlowsDE = (d.nutzerflows as NutzerflowsDE).happyFlows ?? [];
+    const fehlerszenarienDE = (d.nutzerflows as NutzerflowsDE).fehlerszenarien ?? [];
+    const happyPathsEN = (e.userFlows as UserFlowsEN).happyPaths ?? [];
+    const errorScenariosEN = (e.userFlows as UserFlowsEN).errorScenarios ?? [];
     return `Aktueller Titel (DE): ${item.title}
 Aktueller Titel (EN): ${item.titleEN || item.title}
 
@@ -410,16 +435,16 @@ Aktuelle Story (DE):
 Beschreibung: ${d.beschreibung}
 Akzeptanzkriterien: ${(d.akzeptanzkriterien ?? []).join(' | ')}
 Voraussetzungen: ${(d.voraussetzungen ?? []).join(' | ')}
-Happy Flow: ${(d.nutzerflows.happyFlow ?? []).join(' | ')}
-Fehlerszenario: ${(d.nutzerflows.fehlerszenario ?? []).join(' | ')}
+Happy Flows: ${happyFlowsDE.map((f) => f.join(' | ')).join(' || ')}
+Fehlerszenarien: ${fehlerszenarienDE.map((f) => f.join(' | ')).join(' || ')}
 Out of Scope: ${(d.outOfScope ?? []).join(' | ')}
 
 Aktuelle Story (EN):
 Description: ${e.description}
 Acceptance Criteria: ${(e.acceptanceCriteria ?? []).join(' | ')}
 Prerequisites: ${(e.prerequisites ?? []).join(' | ')}
-Happy Path: ${(e.userFlows.happyPath ?? []).join(' | ')}
-Error Scenario: ${(e.userFlows.errorScenario ?? []).join(' | ')}
+Happy Paths: ${happyPathsEN.map((f) => f.join(' | ')).join(' || ')}
+Error Scenarios: ${errorScenariosEN.map((f) => f.join(' | ')).join(' || ')}
 Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
   };
 
@@ -456,7 +481,7 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
             beschreibung: deResult.beschreibung,
             akzeptanzkriterien: deResult.akzeptanzkriterien,
             voraussetzungen: deResult.voraussetzungen,
-            nutzerflows: deResult.nutzerflows,
+            nutzerflows: normalizeNutzerflows(deResult.nutzerflows),
             outOfScope: deResult.outOfScope,
           },
           en: {
@@ -465,7 +490,7 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
             todos: item.en.todos ?? { be: [], fe: [], qa: [] },
             roles: enResult.roles,
             prerequisites: enResult.prerequisites,
-            userFlows: enResult.userFlows,
+            userFlows: normalizeUserFlows(enResult.userFlows),
             outOfScope: enResult.outOfScope,
           },
         };
@@ -491,6 +516,8 @@ Out of Scope: ${(e.outOfScope ?? []).join(' | ')}`;
       setError(null);
       try {
         const d = item.de;
+        const happyFlowsDE = (d.nutzerflows as NutzerflowsDE).happyFlows ?? [];
+        const fehlerszenarienDE = (d.nutzerflows as NutzerflowsDE).fehlerszenarien ?? [];
         const deContent = `Übersetze diese deutsche User Story ins Englische. Behalte die gleiche Struktur und Qualität. Übersetze auch den Titel ins Englische.
 
 Deutsche Story:
@@ -498,8 +525,8 @@ Titel: ${item.title}
 Beschreibung: ${d.beschreibung}
 Akzeptanzkriterien: ${(d.akzeptanzkriterien ?? []).map((ac, i) => `AC${i + 1}: ${ac}`).join('\n')}
 Voraussetzungen: ${(d.voraussetzungen ?? []).join('\n')}
-Happy Flow: ${(d.nutzerflows.happyFlow ?? []).join('\n')}
-Fehlerszenario: ${(d.nutzerflows.fehlerszenario ?? []).join('\n')}
+Happy Flows: ${happyFlowsDE.map((f, i) => `Flow ${i + 1}:\n${f.join('\n')}`).join('\n\n')}
+Fehlerszenarien: ${fehlerszenarienDE.map((f, i) => `Szenario ${i + 1}:\n${f.join('\n')}`).join('\n\n')}
 Links (nicht übersetzen, bleiben gleich): ${(item.links ?? []).join('\n')}
 Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
         const opts = { promptPrefix: 'Übersetze die folgende deutsche User Story ins Englische.' };
@@ -515,7 +542,7 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
             todos: item.en.todos ?? { be: [], fe: [], qa: [] },
             roles: enResult.roles,
             prerequisites: enResult.prerequisites,
-            userFlows: enResult.userFlows,
+            userFlows: normalizeUserFlows(enResult.userFlows),
             outOfScope: enResult.outOfScope,
           },
         };
@@ -542,6 +569,8 @@ Out of Scope: ${(d.outOfScope ?? []).join('\n')}`;
       setError(null);
       try {
         const titleSource = (item.titleEN ?? item.title).trim();
+        const happyPathsEN = (e.userFlows as UserFlowsEN)?.happyPaths ?? [];
+        const errorScenariosEN = (e.userFlows as UserFlowsEN)?.errorScenarios ?? [];
         const enContent = `Translate this English User Story into German. Keep the same structure and quality. Also translate the title into German.
 
 English Story:
@@ -549,8 +578,8 @@ Title: ${titleSource}
 Description: ${e.description}
 Acceptance Criteria: ${(e.acceptanceCriteria ?? []).map((ac, i) => `AC${i + 1}: ${ac}`).join('\n')}
 Prerequisites: ${(e.prerequisites ?? []).join('\n')}
-Happy Path: ${(e.userFlows?.happyPath ?? []).join('\n')}
-Error Scenario: ${(e.userFlows?.errorScenario ?? []).join('\n')}
+Happy Paths: ${happyPathsEN.map((f, i) => `Path ${i + 1}:\n${f.join('\n')}`).join('\n\n')}
+Error Scenarios: ${errorScenariosEN.map((f, i) => `Scenario ${i + 1}:\n${f.join('\n')}`).join('\n\n')}
 Links (do not translate, keep as is): ${(item.links ?? []).join('\n')}
 Out of Scope: ${(e.outOfScope ?? []).join('\n')}`;
         const opts = { promptPrefix: 'Translate the following English User Story into German.' };
@@ -564,7 +593,7 @@ Out of Scope: ${(e.outOfScope ?? []).join('\n')}`;
             beschreibung: deResult.beschreibung,
             akzeptanzkriterien: deResult.akzeptanzkriterien,
             voraussetzungen: deResult.voraussetzungen,
-            nutzerflows: deResult.nutzerflows,
+            nutzerflows: normalizeNutzerflows(deResult.nutzerflows),
             outOfScope: deResult.outOfScope,
           },
         };
@@ -666,7 +695,7 @@ Out of Scope: ${e.outOfScope}`;
       setError(null);
       try {
         const sysPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
-        const sectionLabel = section === 'links' ? 'Links/Ressourcen (Jira, Designs, APIs)' : section;
+        const sectionLabel = section === 'links' ? 'Links/Ressourcen (nur Design-Links, max. 1–3; API-Doku nur wenn zur Story passend)' : section;
         const sectionPrompt = `Aktualisiere nur die Sektion "${sectionLabel}" basierend auf: ${prompt}\n\nAntworte NUR mit dem neuen Inhalt als JSON: für Einzeltext {"value":"..."}, für Array {"value":["...","..."]}.`;
         const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
         const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
@@ -707,6 +736,149 @@ Out of Scope: ${e.outOfScope}`;
           return value.map(stripFlowStepNumber);
         }
         return value;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const regenerateFlow = useCallback(
+    async (
+      item: UserStory,
+      lang: 'de' | 'en',
+      flowType: 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios',
+      flowIndex: number,
+      prompt: string,
+      settings: Settings | null
+    ): Promise<string[] | null> => {
+      if (!settings || !prompt.trim()) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+      const content = lang === 'de' ? item.de : item.en;
+      const flowsContainer = lang === 'de' ? (content as { nutzerflows?: Record<string, string[][]> }).nutzerflows : (content as { userFlows?: Record<string, string[][]> }).userFlows;
+      const flows: string[][] = (flowsContainer && flowType in flowsContainer ? flowsContainer[flowType] : []) ?? [];
+      const currentSteps = flows[flowIndex] ?? [];
+      const flowLabel = lang === 'de'
+        ? (flowType === 'happyFlows' ? 'Happy Flow' : 'Fehlerszenario')
+        : (flowType === 'happyPaths' ? 'Happy path' : 'Error scenario');
+      const sectionPrompt = lang === 'de'
+        ? `${flowLabel} ${flowIndex + 1}. Aktueller Inhalt: ${currentSteps.join(' | ') || '(leer)'}\n\nAnpassung: ${prompt}\n\nAntworte NUR mit JSON: {"value":["Schritt 1","Schritt 2",...]} – Array von Schritten OHNE Nummernprefix.`
+        : `${flowLabel} ${flowIndex + 1}. Current content: ${currentSteps.join(' | ') || '(empty)'}\n\nAdjustment: ${prompt}\n\nRespond ONLY with JSON: {"value":["Step 1","Step 2",...]} – array of steps WITHOUT number prefix.`;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const sysPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
+        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+        let text = '';
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: sectionPrompt }],
+              temperature: 0.3,
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.choices?.[0]?.message?.content?.trim() ?? '';
+        } else {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: modelAnthropic,
+              max_tokens: 1024,
+              system: sysPrompt,
+              messages: [{ role: 'user', content: sectionPrompt }],
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.content?.[0]?.text?.trim() ?? '';
+        }
+        const match = text.match(/\{[^}]*"value"[^}]*\}/);
+        if (!match) return null;
+        const parsed = JSON.parse(match[0]) as { value: string[] };
+        const value = parsed.value;
+        return Array.isArray(value) ? value.map(stripFlowStepNumber) : null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const generateFlow = useCallback(
+    async (
+      item: UserStory,
+      lang: 'de' | 'en',
+      flowType: 'happyFlows' | 'fehlerszenarien' | 'happyPaths' | 'errorScenarios',
+      settings: Settings | null
+    ): Promise<string[] | null> => {
+      if (!settings) return null;
+      const apiKey = settings.provider === 'openai'
+        ? (settings.apiKeyOpenAI ?? settings.apiKey)
+        : (settings.apiKeyAnthropic ?? settings.apiKey);
+      if (!apiKey) return null;
+      const context = buildStoryContext(item);
+      const flowLabel = lang === 'de'
+        ? (flowType === 'happyFlows' ? 'Happy Flow' : 'Fehlerszenario')
+        : (flowType === 'happyPaths' ? 'Happy path' : 'Error scenario');
+      const userPrompt = lang === 'de'
+        ? `Erstelle einen vollständigen neuen ${flowLabel} für diese User Story. Schritte OHNE Nummernprefix. Antworte NUR mit JSON: {"value":["Schritt 1","Schritt 2",...]}\n\n${context}`
+        : `Create a complete new ${flowLabel} for this user story. Steps WITHOUT number prefix. Respond ONLY with JSON: {"value":["Step 1","Step 2",...]}\n\n${context}`;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const sysPrompt = getSystemPrompt(lang, settings.customSystemPromptDE ?? settings.customSystemPrompt, settings.customSystemPromptEN ?? settings.customSystemPrompt);
+        const modelOpenAI = settings.modelOpenAI ?? 'gpt-4o-mini';
+        const modelAnthropic = settings.modelAnthropic ?? 'claude-3-5-haiku-20241022';
+        let text = '';
+        if (settings.provider === 'openai') {
+          const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: modelOpenAI,
+              messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: userPrompt }],
+              temperature: 0.3,
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.choices?.[0]?.message?.content?.trim() ?? '';
+        } else {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: modelAnthropic,
+              max_tokens: 1024,
+              system: sysPrompt,
+              messages: [{ role: 'user', content: userPrompt }],
+            }),
+          });
+          if (!res.ok) throw new Error('API Fehler');
+          const data = await res.json();
+          text = data.content?.[0]?.text?.trim() ?? '';
+        }
+        const match = text.match(/\{[^}]*"value"[^}]*\}/);
+        if (!match) return null;
+        const parsed = JSON.parse(match[0]) as { value: string[] };
+        const value = parsed.value;
+        return Array.isArray(value) ? value.map(stripFlowStepNumber) : null;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
         return null;
@@ -829,9 +1001,17 @@ Keine anderen Texte.`;
     const content = lang === 'de' ? item.de : item.en;
     const obj = content as unknown as Record<string, unknown>;
     if (section.includes('.')) {
-      const [field, subField] = section.split('.');
+      const parts = section.split('.');
+      const [field, subField, idxStr] = parts;
       const nested = obj[field] as Record<string, unknown> | undefined;
-      return (nested?.[subField] as string[]) ?? [];
+      const val = nested?.[subField];
+      if (idxStr !== undefined && Array.isArray(val)) {
+        const flowIndex = parseInt(idxStr, 10);
+        if (!isNaN(flowIndex) && val[flowIndex] && Array.isArray(val[flowIndex])) {
+          return val[flowIndex] as string[];
+        }
+      }
+      return (val as string[]) ?? [];
     }
     return (obj[section] as string[]) ?? [];
   };
@@ -862,6 +1042,10 @@ Keine anderen Texte.`;
         'nutzerflows.fehlerszenario': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
         'userFlows.happyPath': { de: 'Happy-Flow-Schritt', en: 'Happy path step' },
         'userFlows.errorScenario': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
+        'nutzerflows.happyFlows': { de: 'Happy-Flow-Schritt', en: 'Happy path step' },
+        'nutzerflows.fehlerszenarien': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
+        'userFlows.happyPaths': { de: 'Happy-Flow-Schritt', en: 'Happy path step' },
+        'userFlows.errorScenarios': { de: 'Fehlerszenario-Schritt', en: 'Error scenario step' },
         voraussetzungen: { de: 'Voraussetzung', en: 'Prerequisite' },
         prerequisites: { de: 'Voraussetzung', en: 'Prerequisite' },
         outOfScope: { de: 'Out-of-Scope-Punkt', en: 'Out-of-scope item' },
@@ -869,7 +1053,7 @@ Keine anderen Texte.`;
         'todos.fe': { de: 'To-Do (Frontend)', en: 'To-Do (Frontend)' },
         'todos.qa': { de: 'To-Do (QA)', en: 'To-Do (QA)' },
       };
-      const label = sectionLabels[section]?.[lang] ?? 'Listenpunkt';
+      const label = sectionLabels[section]?.[lang] ?? sectionLabels[section.replace(/\.\d+$/, '')]?.[lang] ?? 'Listenpunkt';
       const isAc = section === 'akzeptanzkriterien' || section === 'acceptanceCriteria';
       const isFlow = section.includes('Flow') || section.includes('flow') || section.includes('szenario') || section.includes('Scenario');
       const formatHint = isAc ? `Format: AC${nextIndex}: [Inhalt]` : isFlow ? (lang === 'de' ? 'Nur der Schritttext, KEIN Nummernprefix (z.B. "User öffnet..." nicht "1. User öffnet...")' : 'Step text only, NO number prefix (e.g. "User opens..." not "1. User opens...")') : 'Kurzer, prägnanter Satz.';
@@ -1001,7 +1185,7 @@ Der Output soll ein mehrzeiliger Text sein, den der User als Vorlage in ein Besc
     []
   );
 
-  return { generate, regenerateSection, regenerateFullStory, regenerateFullBugReport, syncDEToEN, syncENToDE, extractCopyBook, generatePromptFromDescription, generateSingleListItem, isLoading, error };
+  return { generate, regenerateSection, regenerateFlow, generateFlow, regenerateFullStory, regenerateFullBugReport, syncDEToEN, syncENToDE, extractCopyBook, generatePromptFromDescription, generateSingleListItem, isLoading, error };
 }
 
 function parseAIResponse(
@@ -1029,14 +1213,7 @@ function parseAIResponse(
         beschreibung: String(parsed.beschreibung ?? ''),
         akzeptanzkriterien: Array.isArray(parsed.akzeptanzkriterien) ? parsed.akzeptanzkriterien.map(String) : [],
         voraussetzungen: toStrArr(parsed.voraussetzungen),
-        nutzerflows: {
-          happyFlow: Array.isArray((parsed.nutzerflows as Record<string, unknown>)?.happyFlow)
-            ? (parsed.nutzerflows as { happyFlow: string[] }).happyFlow.map(stripFlowStepNumber)
-            : [],
-          fehlerszenario: Array.isArray((parsed.nutzerflows as Record<string, unknown>)?.fehlerszenario)
-            ? (parsed.nutzerflows as { fehlerszenario: string[] }).fehlerszenario.map(stripFlowStepNumber)
-            : undefined,
-        },
+        nutzerflows: normalizeNutzerflows(parsed.nutzerflows),
         anhaenge: toStrArr(parsed.anhaenge),
         outOfScope: toStrArr(parsed.outOfScope),
         jiraTicket: String(parsed.jiraTicket ?? ''),
@@ -1054,14 +1231,7 @@ function parseAIResponse(
         todos: { be: [], fe: [], qa: [] },
         roles: String(parsed.roles ?? ''),
         prerequisites: toStrArr(parsed.prerequisites),
-        userFlows: {
-          happyPath: Array.isArray((parsed.userFlows as Record<string, unknown>)?.happyPath)
-            ? (parsed.userFlows as { happyPath: string[] }).happyPath.map(stripFlowStepNumber)
-            : [],
-          errorScenario: Array.isArray((parsed.userFlows as Record<string, unknown>)?.errorScenario)
-            ? (parsed.userFlows as { errorScenario: string[] }).errorScenario.map(stripFlowStepNumber)
-            : undefined,
-        },
+        userFlows: normalizeUserFlows(parsed.userFlows),
         resources: toStrArr(parsed.resources),
         outOfScope: toStrArr(parsed.outOfScope),
         ...(title && { title }),

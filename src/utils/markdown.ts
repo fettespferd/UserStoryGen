@@ -198,7 +198,7 @@ function userStoryDEToMarkdown(
   lines.push('');
   lines.push(heading(h, '✅ Akzeptanzkriterien'));
   lines.push('');
-  story.akzeptanzkriterien.forEach((ac, i) => lines.push(`AC${i + 1}: ${stripAcPrefix(ac)}`));
+  story.akzeptanzkriterien.forEach((ac, i) => lines.push(`- AC${i + 1}: ${stripAcPrefix(ac)}`));
   lines.push('');
   lines.push(heading(h, '🔑 Voraussetzungen'));
   lines.push('');
@@ -206,14 +206,23 @@ function userStoryDEToMarkdown(
   lines.push('');
   lines.push(heading(h, '🔀 Nutzerflows'));
   lines.push('');
-  lines.push(heading(h, 'Happy Flow'));
-  lines.push('');
-  story.nutzerflows.happyFlow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
-  if (story.nutzerflows.fehlerszenario && story.nutzerflows.fehlerszenario.length > 0) {
+  const nf = story.nutzerflows as { happyFlows?: string[][]; happyFlow?: string[] };
+  const happyFlows: string[][] = (nf.happyFlows?.length ? nf.happyFlows : (nf.happyFlow?.length ? [nf.happyFlow.map(stripFlowStepNumber)] : []));
+  happyFlows.forEach((flow, flowIdx) => {
+    if (flowIdx > 0) lines.push('');
+    lines.push(heading(h, happyFlows.length > 1 ? `Happy Flow ${flowIdx + 1}` : 'Happy Flow'));
     lines.push('');
-    lines.push(heading(h, 'Fehlerszenario'));
-    lines.push('');
-    story.nutzerflows.fehlerszenario.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+    flow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+  });
+  const nf2 = story.nutzerflows as { fehlerszenarien?: string[][]; fehlerszenario?: string[] };
+  const fehlerszenarien: string[][] = (nf2.fehlerszenarien?.length ? nf2.fehlerszenarien : (nf2.fehlerszenario?.length ? [nf2.fehlerszenario.map(stripFlowStepNumber)] : []));
+  if (fehlerszenarien.length > 0) {
+    fehlerszenarien.forEach((flow, flowIdx) => {
+      lines.push('');
+      lines.push(heading(h, fehlerszenarien.length > 1 ? `Fehlerszenario ${flowIdx + 1}` : 'Fehlerszenario'));
+      lines.push('');
+      flow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+    });
   }
   lines.push('');
   lines.push(heading(h, '📚 Anhänge / Links'));
@@ -268,7 +277,7 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, '✅ Acceptance Criteria'));
   lines.push('');
-  story.acceptanceCriteria.forEach((ac, i) => lines.push(`AC${i + 1}: ${stripAcPrefix(ac)}`));
+  story.acceptanceCriteria.forEach((ac, i) => lines.push(`- AC${i + 1}: ${stripAcPrefix(ac)}`));
   lines.push('');
   lines.push(heading(h, '👥 Roles'));
   lines.push('');
@@ -280,14 +289,23 @@ function userStoryENToMarkdown(
   lines.push('');
   lines.push(heading(h, '🔀 User Flows'));
   lines.push('');
-  lines.push(heading(h, 'Happy path'));
-  lines.push('');
-  story.userFlows.happyPath.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
-  if (story.userFlows.errorScenario && story.userFlows.errorScenario.length > 0) {
+  const uf = story.userFlows as { happyPaths?: string[][]; happyPath?: string[] };
+  const happyPaths: string[][] = (uf.happyPaths?.length ? uf.happyPaths : (uf.happyPath?.length ? [uf.happyPath.map(stripFlowStepNumber)] : []));
+  happyPaths.forEach((flow, flowIdx) => {
+    if (flowIdx > 0) lines.push('');
+    lines.push(heading(h, happyPaths.length > 1 ? `Happy path ${flowIdx + 1}` : 'Happy path'));
     lines.push('');
-    lines.push(heading(h, 'Error scenario'));
-    lines.push('');
-    story.userFlows.errorScenario.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+    flow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+  });
+  const uf2 = story.userFlows as { errorScenarios?: string[][]; errorScenario?: string[] };
+  const errorScenarios: string[][] = (uf2.errorScenarios?.length ? uf2.errorScenarios : (uf2.errorScenario?.length ? [uf2.errorScenario.map(stripFlowStepNumber)] : []));
+  if (errorScenarios.length > 0) {
+    errorScenarios.forEach((flow, flowIdx) => {
+      lines.push('');
+      lines.push(heading(h, errorScenarios.length > 1 ? `Error scenario ${flowIdx + 1}` : 'Error scenario'));
+      lines.push('');
+      flow.forEach((step, i) => lines.push(`${i + 1}. ${stripFlowStepNumber(step)}`));
+    });
   }
   lines.push('');
   lines.push(heading(h, '📚 Resources / Links'));

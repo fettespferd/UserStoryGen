@@ -1,9 +1,67 @@
-import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, UserStoryENContent } from '../types/story';
+import type { StoryItem, UserStory, UserStoryDE, UserStoryEN, BugReport, BugReportContent, UserStoryENContent, NutzerflowsDE, UserFlowsEN } from '../types/story';
+import { stripFlowStepNumber } from './format';
 
 function toStrArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String).filter(Boolean);
   if (typeof v === 'string' && v.trim()) return v.split(/\n/).map((s) => s.trim()).filter(Boolean);
   return [];
+}
+
+/** Prüft ob ein Array ein Flow (string[]) ist (nicht verschachtelt). */
+function isFlowSteps(arr: unknown): arr is string[] {
+  return Array.isArray(arr) && arr.every((x) => typeof x === 'string');
+}
+
+/** Migriert alte Nutzerflows (happyFlow/fehlerszenario) zu neuem Format (happyFlows/fehlerszenarien). */
+export function normalizeNutzerflows(raw: unknown): NutzerflowsDE {
+  const n = raw as Record<string, unknown> | undefined;
+  if (!n) return { happyFlows: [['User …', 'System …']], fehlerszenarien: [] };
+
+  let happyFlows: string[][] = [];
+  if (Array.isArray(n.happyFlows) && n.happyFlows.every(isFlowSteps)) {
+    happyFlows = n.happyFlows.map((f: string[]) => f.map(stripFlowStepNumber));
+  } else if (Array.isArray((n as { happyFlow?: string[] }).happyFlow)) {
+    const hf = (n as { happyFlow: string[] }).happyFlow.map(stripFlowStepNumber);
+    happyFlows = hf.length ? [hf] : [['User …', 'System …']];
+  } else {
+    happyFlows = [['User …', 'System …']];
+  }
+
+  let fehlerszenarien: string[][] | undefined;
+  if (Array.isArray(n.fehlerszenarien) && n.fehlerszenarien.every(isFlowSteps)) {
+    fehlerszenarien = n.fehlerszenarien.map((f: string[]) => f.map(stripFlowStepNumber));
+  } else if (Array.isArray((n as { fehlerszenario?: string[] }).fehlerszenario)) {
+    const fs = (n as { fehlerszenario: string[] }).fehlerszenario.map(stripFlowStepNumber);
+    fehlerszenarien = fs.length ? [fs] : undefined;
+  }
+
+  return { happyFlows, fehlerszenarien };
+}
+
+/** Migriert alte User Flows (happyPath/errorScenario) zu neuem Format (happyPaths/errorScenarios). */
+export function normalizeUserFlows(raw: unknown): UserFlowsEN {
+  const u = raw as Record<string, unknown> | undefined;
+  if (!u) return { happyPaths: [['User …', 'System …']], errorScenarios: [] };
+
+  let happyPaths: string[][] = [];
+  if (Array.isArray(u.happyPaths) && u.happyPaths.every(isFlowSteps)) {
+    happyPaths = u.happyPaths.map((f: string[]) => f.map(stripFlowStepNumber));
+  } else if (Array.isArray((u as { happyPath?: string[] }).happyPath)) {
+    const hp = (u as { happyPath: string[] }).happyPath.map(stripFlowStepNumber);
+    happyPaths = hp.length ? [hp] : [['User …', 'System …']];
+  } else {
+    happyPaths = [['User …', 'System …']];
+  }
+
+  let errorScenarios: string[][] | undefined;
+  if (Array.isArray(u.errorScenarios) && u.errorScenarios.every(isFlowSteps)) {
+    errorScenarios = u.errorScenarios.map((f: string[]) => f.map(stripFlowStepNumber));
+  } else if (Array.isArray((u as { errorScenario?: string[] }).errorScenario)) {
+    const es = (u as { errorScenario: string[] }).errorScenario.map(stripFlowStepNumber);
+    errorScenarios = es.length ? [es] : undefined;
+  }
+
+  return { happyPaths, errorScenarios };
 }
 
 const DEFAULT_EN: UserStoryENContent = {
@@ -12,7 +70,7 @@ const DEFAULT_EN: UserStoryENContent = {
   todos: { be: [], fe: [], qa: [] },
   roles: '',
   prerequisites: [''],
-  userFlows: { happyPath: ['1. User …', '2. System …'] },
+  userFlows: { happyPaths: [['User …', 'System …']], errorScenarios: [] },
   outOfScope: [''],
 };
 
@@ -87,13 +145,14 @@ export function migrateItem(raw: unknown): StoryItem | null {
         beschreibung: story.de.beschreibung,
         akzeptanzkriterien: story.de.akzeptanzkriterien,
         voraussetzungen: toStrArray(de?.voraussetzungen),
-        nutzerflows: story.de.nutzerflows,
+        nutzerflows: normalizeNutzerflows(story.de.nutzerflows),
         outOfScope: toStrArray(de?.outOfScope),
       } : undefined,
       en: story.en ? (() => {
         const { resources: _r, ...rest } = story.en as Record<string, unknown>;
         return {
           ...rest,
+          userFlows: normalizeUserFlows((story.en as { userFlows?: unknown }).userFlows),
           prerequisites: toStrArray(en?.prerequisites),
           outOfScope: toStrArray(en?.outOfScope),
         };
@@ -115,7 +174,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
         beschreibung: old.beschreibung,
         akzeptanzkriterien: old.akzeptanzkriterien,
         voraussetzungen: toStrArray(old.voraussetzungen),
-        nutzerflows: old.nutzerflows,
+        nutzerflows: normalizeNutzerflows(old.nutzerflows),
         outOfScope: toStrArray(old.outOfScope),
       },
       en: DEFAULT_EN,
@@ -136,7 +195,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
         beschreibung: 'Als [Rolle] möchte ich [Ziel], damit [Nutzen].',
         akzeptanzkriterien: ['…', '…', '…'],
         voraussetzungen: [''],
-        nutzerflows: { happyFlow: ['1. User …', '2. System …'] },
+        nutzerflows: { happyFlows: [['1. User …', '2. System …']] },
         outOfScope: [''],
       },
       en: {
@@ -145,7 +204,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
         todos: old.todos,
         roles: old.roles,
         prerequisites: toStrArray(old.prerequisites),
-        userFlows: old.userFlows,
+        userFlows: normalizeUserFlows(old.userFlows),
         outOfScope: toStrArray(old.outOfScope),
       },
       links,
@@ -170,12 +229,7 @@ export function migrateItem(raw: unknown): StoryItem | null {
         beschreibung: String(obj.beschreibung ?? obj.description ?? ''),
         akzeptanzkriterien: Array.isArray(obj.akzeptanzkriterien) ? obj.akzeptanzkriterien.map(String) : ['AC1: …'],
         voraussetzungen: toStrArray(obj.voraussetzungen ?? obj.prerequisites),
-        nutzerflows: {
-          happyFlow: Array.isArray((obj.nutzerflows as { happyFlow?: string[] })?.happyFlow)
-            ? (obj.nutzerflows as { happyFlow: string[] }).happyFlow
-            : ['1. User …', '2. System …'],
-          fehlerszenario: undefined,
-        },
+        nutzerflows: normalizeNutzerflows(obj.nutzerflows),
         outOfScope: toStrArray(obj.outOfScope),
       },
       en: DEFAULT_EN,

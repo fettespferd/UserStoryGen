@@ -12,16 +12,40 @@ export type ProjectType = 'aokn' | 'healthmatch';
 
 export type StoryItem = UserStory | BugReport;
 
+/** Ordner für die Strukturierung von Stories. */
+export interface Folder {
+  id: string;
+  name: string;
+  /** null = Root-Ordner. */
+  parentId: string | null;
+}
+
+/** Ein Flow ist eine Liste von Schritten. Mehrere Flows pro Typ möglich. */
+export type FlowSteps = string[];
+
+/** Nutzerflows (DE): happyFlows und fehlerszenarien sind Arrays von Flows. */
+export interface NutzerflowsDE {
+  /** Mehrere Happy Flows möglich (jeder Flow = Array von Schritten). */
+  happyFlows: FlowSteps[];
+  /** Mehrere Fehlerszenario-Flows möglich. */
+  fehlerszenarien?: FlowSteps[];
+}
+
+/** User Flows (EN): happyPaths und errorScenarios sind Arrays von Flows. */
+export interface UserFlowsEN {
+  /** Mehrere Happy Paths möglich (jeder Flow = Array von Schritten). */
+  happyPaths: FlowSteps[];
+  /** Mehrere Error-Scenario-Flows möglich. */
+  errorScenarios?: FlowSteps[];
+}
+
 // ── User Story Content (DE) ──
 
 export interface UserStoryDEContent {
   beschreibung: string;
   akzeptanzkriterien: string[];
   voraussetzungen: string[];
-  nutzerflows: {
-    happyFlow: string[];
-    fehlerszenario?: string[];
-  };
+  nutzerflows: NutzerflowsDE;
   outOfScope: string[];
 }
 
@@ -33,10 +57,7 @@ export interface UserStoryENContent {
   todos: { be: string[]; fe: string[]; qa: string[] };
   roles: string;
   prerequisites: string[];
-  userFlows: {
-    happyPath: string[];
-    errorScenario?: string[];
-  };
+  userFlows: UserFlowsEN;
   outOfScope: string[];
 }
 
@@ -89,16 +110,20 @@ export interface UserStory {
   copyBook: CopyBookEntry[];
   /** Design-Bilder (base64) – für Extraktion und Regenerierung */
   images: string[];
+  /** Ordner-ID für die Zuordnung zu einem Ordner. null/undefined = Root. */
+  folderId?: string | null;
+  /** Sortierreihenfolge innerhalb des Ordners (niedriger = weiter oben). */
+  order?: number;
 }
 
-// Legacy types (für Migration alter gespeicherter Stories)
+// Legacy types (für Migration alter gespeicherter Stories / AI-Response)
 export interface UserStoryDE {
   id: string;
   type: 'user-story-de';
   beschreibung: string;
   akzeptanzkriterien: string[];
   voraussetzungen: string[];
-  nutzerflows: { happyFlow: string[]; fehlerszenario?: string[] };
+  nutzerflows: NutzerflowsDE | { happyFlow?: string[]; fehlerszenario?: string[] };
   anhaenge: string[];
   outOfScope: string[];
   jiraTicket: string;
@@ -111,7 +136,7 @@ export interface UserStoryEN {
   todos: { be: string[]; fe: string[]; qa: string[] };
   roles: string;
   prerequisites: string[];
-  userFlows: { happyPath: string[]; errorScenario?: string[] };
+  userFlows: UserFlowsEN | { happyPath?: string[]; errorScenario?: string[] };
   resources: string[];
   outOfScope: string[];
 }
@@ -136,6 +161,10 @@ export interface BugReport {
   /** Erstellungsdatum (ISO-String). */
   createdAt?: string;
   project?: ProjectType;
+  /** Ordner-ID für die Zuordnung zu einem Ordner. null/undefined = Root. */
+  folderId?: string | null;
+  /** Sortierreihenfolge innerhalb des Ordners (niedriger = weiter oben). */
+  order?: number;
   /** Screenshots/Design-Bilder (base64) */
   images?: string[];
   de: BugReportContent;
