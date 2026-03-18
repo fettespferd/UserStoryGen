@@ -170,7 +170,7 @@ function AppContent({
   const [deleteFolderConfirmId, setDeleteFolderConfirmId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null | undefined>(undefined);
   const [dragOverStoryId, setDragOverStoryId] = useState<string | 'end' | undefined>(undefined);
-  const [foldersLoaded, setFoldersLoaded] = useState(false);
+  const [, setFoldersLoaded] = useState(false);
 
   const handleSaveStory = useCallback(async () => {
     const item = store.currentItem;
@@ -951,7 +951,7 @@ function AppContent({
                     </Box>
                   </Box>
                   <List dense disablePadding sx={{ pb: 2 }}>
-                    {filteredAndSortedItems.map((item, index) => {
+                    {filteredAndSortedItems.map((item) => {
                       const isBug = item.type === 'bug-report';
                       const title = isBug
                         ? (item as BugReport).de?.title ?? (item as BugReport).en?.title ?? `Bug ${item.id.slice(-7)}`
