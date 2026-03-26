@@ -16,7 +16,7 @@ Nutzerflows: Happy Flow und Fehlerszenario nur wenn zur Story passend. Schritte 
 ACs sind Quelle der Wahrheit und überprüfbar. Funktionale und nicht-funktionale Anforderungen berücksichtigen.
 UI-Texte nur in Anführungszeichen.
 
-anhaenge: Maximal 1–3 Einträge. Immer Design-Link(s) (Figma, Zeplin o.ä.). API-Doku nur wenn die Story explizit APIs/Backend betrifft. Keine Jira-Links, keine generischen Platzhalter.
+anhaenge: Nur echte, im Kontext explizit genannte URLs eintragen. Niemals URLs erfinden oder halluzinieren. Wenn kein echter Link bekannt ist: leeres Array []. Keine Jira-Links, keine Platzhalter, keine Beispiel-URLs.
 
 Antworte NUR mit gültigem JSON, kein anderer Text.`;
 
@@ -32,7 +32,7 @@ User flows: Happy path and error scenario only when fitting the story. Steps WIT
 ACs are source of truth and verifiable. Consider functional and non-functional requirements.
 UI texts in quotes only.
 
-resources: Max 1–3 entries. Always design link(s) (Figma, Zeplin, etc.). API docs only when the story explicitly involves APIs/backend. No Jira links, no generic placeholders.
+resources: Only include URLs that are explicitly mentioned in the input context. Never invent or hallucinate URLs. If no real link is known: empty array []. No Jira links, no placeholders, no example URLs.
 
 Respond ONLY with valid JSON, no other text.`;
 
@@ -75,7 +75,7 @@ function getDetailInstruction(detailLevel: DetailLevel, type: 'user-story' | 'bu
   }
 }
 
-function mergeToLinks(de?: { anhaenge?: string[]; jiraTicket?: string }, en?: { resources?: string[] }): string[] {
+function mergeToLinks(de?: { anhaenge?: string[] }, en?: { resources?: string[] }): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   const add = (v: string) => {
@@ -86,7 +86,6 @@ function mergeToLinks(de?: { anhaenge?: string[]; jiraTicket?: string }, en?: { 
     }
   };
   if (de?.anhaenge) de.anhaenge.forEach(add);
-  if (de?.jiraTicket) add(de.jiraTicket);
   if (en?.resources) en.resources.forEach(add);
   return out;
 }
@@ -98,9 +97,8 @@ const USER_STORY_DE_SCHEMA = `{
   "akzeptanzkriterien": ["AC1: ...", "AC2: ...", "AC3: ..."],
   "voraussetzungen": "...",
   "nutzerflows": { "happyFlow": ["User …", "System …"], "fehlerszenario": ["User …", "System erkennt ..."] },
-  "anhaenge": ["Design-Link (Figma/Zeplin), ggf. API-Doku wenn relevant"],
-  "outOfScope": "...",
-  "jiraTicket": "..."
+  "anhaenge": [],
+  "outOfScope": "..."
 }`;
 
 const USER_STORY_EN_SCHEMA = `{
@@ -111,7 +109,7 @@ const USER_STORY_EN_SCHEMA = `{
   "roles": "...",
   "prerequisites": "...",
   "userFlows": { "happyPath": ["User …", "System …"], "errorScenario": ["User …", "System detects ..."] },
-  "resources": ["Design link (Figma/Zeplin), optionally API docs if relevant"],
+  "resources": [],
   "outOfScope": "..."
 }`;
 
