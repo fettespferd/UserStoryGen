@@ -312,6 +312,4 @@ export interface Settings {
   templates?: StoryTemplate[];
   /** Benutzerdefinierte Prompt-Vorlagen (füllen das KI-Eingabefeld). */
   promptTemplates?: PromptTemplate[];
-  /** E-Mail-Adresse des Nutzers (für Vorschläge und Admin-Erkennung). */
-  userEmail?: string;
 }

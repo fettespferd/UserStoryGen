@@ -48,7 +48,6 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { useStorage } from './hooks/useStorage';
 import { useStoryStore } from './hooks/useStoryStore';
 import { useAIGenerator } from './hooks/useAIGenerator';
-import { usePromptProposals } from './hooks/usePromptProposals';
 
 import { StoryEditor } from './components/StoryEditor';
 import { BugEditor } from './components/BugEditor';
@@ -153,7 +152,6 @@ function AppContent({
   const store = useStoryStore();
   const ai = useAIGenerator();
   const snackbar = useSnackbar();
-  const { loadGlobalPrompt } = usePromptProposals();
 
   const [currentView, setCurrentView] = useState<'main' | 'settings'>('main');
   const [storyLangTab, setStoryLangTab] = useState(0);
@@ -216,25 +214,6 @@ function AppContent({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storage.hasAccess]);
-
-  // Globalen Prompt beim Start laden und in Settings einsetzen, wenn kein eigener gesetzt
-  useEffect(() => {
-    loadGlobalPrompt().then((gp) => {
-      if (!gp) return;
-      setSettings((prev) => {
-        if (!prev) return prev;
-        const hasDE = Boolean(prev.customSystemPromptDE?.trim());
-        const hasEN = Boolean(prev.customSystemPromptEN?.trim());
-        if (hasDE && hasEN) return prev;
-        return {
-          ...prev,
-          customSystemPromptDE: hasDE ? prev.customSystemPromptDE : (gp.prompt_de ?? prev.customSystemPromptDE),
-          customSystemPromptEN: hasEN ? prev.customSystemPromptEN : (gp.prompt_en ?? prev.customSystemPromptEN),
-        };
-      });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const saveFoldersToStorage = useCallback(
     async (folders: Folder[]) => {

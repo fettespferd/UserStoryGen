@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Paper,
@@ -20,9 +20,6 @@ import {
   Switch,
   IconButton,
   CircularProgress,
-  Chip,
-  Divider,
-  Tooltip,
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import AddIcon from '@mui/icons-material/Add';
@@ -34,7 +31,6 @@ import type { UseAIGeneratorReturn } from '../hooks/useAIGenerator';
 import { FolderAccessDialog } from './FolderAccessDialog';
 import { getDefaultSystemPrompt } from '../hooks/useAIGenerator';
 import { generateId } from '../utils/templates';
-import { usePromptProposals, ADMIN_EMAIL } from '../hooks/usePromptProposals';
 import bgAnnie from '../../assets/annie-spratt-QckxruozjRg-unsplash.jpg';
 import bgEmile from '../../assets/emile-perron-xrVDYZRGdw4-unsplash.jpg';
 import bgHoward from '../../assets/howard-bouchevereau-RSCirJ70NDM-unsplash.jpg';
@@ -153,18 +149,7 @@ export function Settings({
   const [markdownIncludeTodos, setMarkdownIncludeTodos] = useState(settings?.markdownIncludeTodos !== false);
   const [markdownIncludeEfforts, setMarkdownIncludeEfforts] = useState(settings?.markdownIncludeEfforts !== false);
   const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>(settings?.promptTemplates ?? []);
-  const [userEmail, setUserEmail] = useState(settings?.userEmail ?? '');
   const [saveLoading, setSaveLoading] = useState(false);
-
-  // Prompt-Vorschlags-System
-  const proposals = usePromptProposals();
-  const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
-  const [proposalTarget, setProposalTarget] = useState<'de' | 'en' | 'both'>('both');
-  const [proposalSuccess, setProposalSuccess] = useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
-  const [reviewId, setReviewId] = useState<string | null>(null);
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewAction, setReviewAction] = useState<'approved' | 'declined' | null>(null);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderDialogLoading, setFolderDialogLoading] = useState(false);
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false);
@@ -200,7 +185,6 @@ export function Settings({
       setMarkdownIncludeTodos(settings.markdownIncludeTodos !== false);
       setMarkdownIncludeEfforts(settings.markdownIncludeEfforts !== false);
       setPromptTemplates(settings.promptTemplates ?? []);
-      setUserEmail(settings.userEmail ?? '');
     }
   }, [settings]);
 
@@ -257,7 +241,6 @@ export function Settings({
       markdownIncludeTodos,
       markdownIncludeEfforts,
       promptTemplates: promptTemplates.length > 0 ? promptTemplates : undefined,
-      userEmail: userEmail.trim() || undefined,
     };
     onSettingsChange(next);
     try {
@@ -271,30 +254,6 @@ export function Settings({
       setSaveLoading(false);
     }
   };
-
-  const handleSubmitProposal = useCallback(async () => {
-    const email = userEmail.trim();
-    if (!email) return;
-    const de = proposalTarget !== 'en' ? (customSystemPromptDE || getDefaultSystemPrompt('de')) : null;
-    const en = proposalTarget !== 'de' ? (customSystemPromptEN || getDefaultSystemPrompt('en')) : null;
-    const ok = await proposals.submitProposal(email, de, en);
-    if (ok) setProposalSuccess(true);
-  }, [userEmail, proposalTarget, customSystemPromptDE, customSystemPromptEN, proposals]);
-
-  const handleOpenAdminPanel = useCallback(async () => {
-    setAdminPanelOpen(true);
-    await proposals.loadProposals();
-  }, [proposals]);
-
-  const handleReview = useCallback(async () => {
-    if (!reviewId || !reviewAction) return;
-    await proposals.reviewProposal(reviewId, reviewAction, reviewComment);
-    setReviewId(null);
-    setReviewComment('');
-    setReviewAction(null);
-  }, [reviewId, reviewAction, reviewComment, proposals]);
-
-  const isAdmin = userEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
   return (
     <Paper
@@ -319,23 +278,6 @@ export function Settings({
       )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-            Deine E-Mail-Adresse
-          </Typography>
-          <TextField
-            label="E-Mail"
-            value={userEmail}
-            onChange={(e) => setUserEmail(e.target.value)}
-            fullWidth
-            size="small"
-            type="email"
-            placeholder="name@beispiel.de"
-            helperText="Wird für Prompt-Vorschläge verwendet und nicht öffentlich angezeigt."
-          />
-        </Box>
-
         <FormControl fullWidth size="small">
           <InputLabel>KI-Provider</InputLabel>
           <Select
@@ -883,40 +825,6 @@ export function Settings({
         </Dialog>
         </Box>
 
-        {/* Vorschlag einreichen */}
-        <Box>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-            System-Prompt als Vorschlag einreichen
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-            Reiche deinen angepassten System-Prompt zur Prüfung ein. Der Admin kann ihn annehmen und als neuen Standard für alle Nutzer aktivieren.
-          </Typography>
-          <Tooltip title={!userEmail.trim() ? 'Bitte zuerst E-Mail-Adresse eintragen' : ''}>
-            <span>
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={!userEmail.trim()}
-                onClick={() => { setProposalDialogOpen(true); setProposalSuccess(false); }}
-              >
-                Vorschlag einreichen
-              </Button>
-            </span>
-          </Tooltip>
-          {isAdmin && (
-            <Button
-              variant="outlined"
-              size="small"
-              color="warning"
-              sx={{ ml: 1 }}
-              onClick={handleOpenAdminPanel}
-            >
-              Admin-Panel
-            </Button>
-          )}
-        </Box>
-
         <Button
           variant="contained"
           onClick={handleSave}
@@ -926,191 +834,6 @@ export function Settings({
           {saveLoading ? 'Speichern…' : 'Speichern'}
         </Button>
       </Box>
-
-      {/* Dialog: Vorschlag einreichen */}
-      <Dialog open={proposalDialogOpen} onClose={() => setProposalDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>System-Prompt als Vorschlag einreichen</DialogTitle>
-        <DialogContent>
-          {proposalSuccess ? (
-            <Alert severity="success" sx={{ mt: 1 }}>
-              Dein Vorschlag wurde erfolgreich eingereicht und wird vom Admin geprüft.
-            </Alert>
-          ) : (
-            <>
-              <DialogContentText sx={{ mb: 2 }}>
-                Wähle, welchen Prompt du einreichen möchtest. Der Admin prüft den Vorschlag und kann ihn als neuen Standard für alle Nutzer aktivieren.
-              </DialogContentText>
-              {proposals.error && <Alert severity="error" sx={{ mb: 1 }}>{proposals.error}</Alert>}
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Welcher Prompt?</InputLabel>
-                <Select
-                  value={proposalTarget}
-                  label="Welcher Prompt?"
-                  onChange={(e) => setProposalTarget(e.target.value as 'de' | 'en' | 'both')}
-                >
-                  <MenuItem value="both">Beide (DE + EN)</MenuItem>
-                  <MenuItem value="de">Nur Deutsch</MenuItem>
-                  <MenuItem value="en">Nur Englisch</MenuItem>
-                </Select>
-              </FormControl>
-              {(proposalTarget === 'de' || proposalTarget === 'both') && (
-                <TextField
-                  label="DE-Prompt (Vorschau)"
-                  value={customSystemPromptDE || getDefaultSystemPrompt('de')}
-                  multiline
-                  minRows={3}
-                  fullWidth
-                  size="small"
-                  InputProps={{ readOnly: true }}
-                  sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
-                />
-              )}
-              {(proposalTarget === 'en' || proposalTarget === 'both') && (
-                <TextField
-                  label="EN-Prompt (Vorschau)"
-                  value={customSystemPromptEN || getDefaultSystemPrompt('en')}
-                  multiline
-                  minRows={3}
-                  fullWidth
-                  size="small"
-                  InputProps={{ readOnly: true }}
-                  sx={{ '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
-                />
-              )}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setProposalDialogOpen(false)}>
-            {proposalSuccess ? 'Schließen' : 'Abbrechen'}
-          </Button>
-          {!proposalSuccess && (
-            <Button
-              variant="contained"
-              onClick={handleSubmitProposal}
-              disabled={proposals.loading}
-              startIcon={proposals.loading ? <CircularProgress size={16} color="inherit" /> : undefined}
-            >
-              {proposals.loading ? 'Einreichen…' : 'Einreichen'}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog: Admin-Panel */}
-      <Dialog open={adminPanelOpen} onClose={() => setAdminPanelOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          Admin-Panel – Prompt-Vorschläge
-          <Chip label="Admin" color="warning" size="small" sx={{ ml: 1 }} />
-        </DialogTitle>
-        <DialogContent>
-          {proposals.loading && <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', my: 2 }} />}
-          {proposals.error && <Alert severity="error" sx={{ mb: 2 }}>{proposals.error}</Alert>}
-          {!proposals.loading && proposals.proposals.length === 0 && (
-            <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-              Keine Vorschläge vorhanden.
-            </Typography>
-          )}
-          {proposals.proposals.map((p) => (
-            <Paper key={p.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-                <Typography variant="body2" fontWeight={600}>{p.user_email}</Typography>
-                <Chip
-                  label={p.status === 'pending' ? 'Ausstehend' : p.status === 'approved' ? 'Angenommen' : 'Abgelehnt'}
-                  color={p.status === 'pending' ? 'default' : p.status === 'approved' ? 'success' : 'error'}
-                  size="small"
-                />
-                <Typography variant="caption" color="text.secondary">
-                  {new Date(p.created_at).toLocaleString('de-DE')}
-                </Typography>
-              </Box>
-              {p.prompt_de && (
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>DE-Prompt:</Typography>
-                  <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1, mt: 0.5, fontSize: '0.7rem' }}>
-                    {p.prompt_de}
-                  </Typography>
-                </Box>
-              )}
-              {p.prompt_en && (
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>EN-Prompt:</Typography>
-                  <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'pre-wrap', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1, mt: 0.5, fontSize: '0.7rem' }}>
-                    {p.prompt_en}
-                  </Typography>
-                </Box>
-              )}
-              {p.admin_comment && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  Kommentar: {p.admin_comment}
-                </Typography>
-              )}
-              {p.status === 'pending' && (
-                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="success"
-                    onClick={() => { setReviewId(p.id); setReviewAction('approved'); setReviewComment(''); }}
-                  >
-                    Annehmen
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    onClick={() => { setReviewId(p.id); setReviewAction('declined'); setReviewComment(''); }}
-                  >
-                    Ablehnen
-                  </Button>
-                </Box>
-              )}
-            </Paper>
-          ))}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => proposals.loadProposals()} disabled={proposals.loading} size="small">
-            Aktualisieren
-          </Button>
-          <Button onClick={() => setAdminPanelOpen(false)}>Schließen</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Dialog: Review bestätigen */}
-      <Dialog open={!!reviewId} onClose={() => setReviewId(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          Vorschlag {reviewAction === 'approved' ? 'annehmen' : 'ablehnen'}?
-        </DialogTitle>
-        <DialogContent>
-          {reviewAction === 'approved' && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Der Prompt wird als neuer globaler Standard für alle Nutzer aktiviert.
-            </Alert>
-          )}
-          <TextField
-            label="Kommentar (optional)"
-            value={reviewComment}
-            onChange={(e) => setReviewComment(e.target.value)}
-            fullWidth
-            size="small"
-            multiline
-            minRows={2}
-            placeholder="Begründung oder Feedback für den Nutzer…"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReviewId(null)}>Abbrechen</Button>
-          <Button
-            variant="contained"
-            color={reviewAction === 'approved' ? 'success' : 'error'}
-            onClick={handleReview}
-            disabled={proposals.loading}
-            startIcon={proposals.loading ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            {reviewAction === 'approved' ? 'Annehmen' : 'Ablehnen'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
     </Paper>
   );
